@@ -1,4 +1,5 @@
 use argh::FromArgs;
+use url::Url;
 
 #[allow(dead_code)]
 #[derive(Clone, Debug)]
@@ -45,6 +46,10 @@ struct RawProgramArgs {
         from_str_fn(parse_static_str)
     )]
     address: &'static str,
+
+    /// public host used when generating short URLs
+    #[argh(option, env = "HOST", from_str_fn(parse_public_host))]
+    host: &'static str,
 
     /// postgres host
     #[argh(option, env = "POSTGRES_HOST", from_str_fn(parse_static_str))]
@@ -114,4 +119,64 @@ fn parse_static_str(s: &str) -> Result<&'static str, String> {
     let s = s.to_string().into_boxed_str();
     let s: &'static str = Box::leak(s);
     Ok(s)
+}
+
+fn parse_public_host(s: &str) -> Result<&'static str, String> {
+    if s.is_empty() {
+        return Err("HOST must not be empty".to_string());
+    }
+
+    if s.trim() != s {
+        return Err("HOST must not contain leading or trailing whitespace".to_string());
+    }
+
+    if s.contains('/') {
+        return Err("HOST must not include a scheme or path".to_string());
+    }
+
+    let url = Url::parse(&format!("https://{s}"))
+        .map_err(|_| "HOST must be a host name with an optional port".to_string())?;
+    let host_only = url.host_str().is_some()
+        && url.username().is_empty()
+        && url.password().is_none()
+        && url.path() == "/"
+        && url.query().is_none()
+        && url.fragment().is_none();
+
+    if !host_only {
+        return Err(
+            "HOST must be a host name with an optional port, without scheme or path".to_string(),
+        );
+    }
+
+    parse_static_str(s)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_public_host;
+
+    #[test]
+    fn parse_public_host_accepts_host_with_optional_port() {
+        for host in ["example.com", "api.example.com:443", "localhost:4002"] {
+            assert_eq!(parse_public_host(host).expect("host should parse"), host);
+        }
+    }
+
+    #[test]
+    fn parse_public_host_rejects_url_or_path_values() {
+        for host in [
+            "",
+            "https://example.com",
+            "example.com/path",
+            "example.com/",
+            "example.com?debug=true",
+            "user@example.com",
+        ] {
+            assert!(
+                parse_public_host(host).is_err(),
+                "{host:?} should be rejected"
+            );
+        }
+    }
 }
