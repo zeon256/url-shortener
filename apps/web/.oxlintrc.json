@@ -9,6 +9,9 @@
     "browser": true,
     "es2024": true
   },
+  "rules": {
+    "jsx-a11y/label-has-associated-control": ["error", { "depth": 25 }]
+  },
   "overrides": [
     {
       "files": ["vite.config.ts"],
