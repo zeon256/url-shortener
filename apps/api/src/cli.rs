@@ -14,7 +14,6 @@ pub struct ServerArgs {
     pub address: &'static str,
 }
 
-#[allow(dead_code)]
 #[derive(Clone, Copy, Debug)]
 pub struct PostgresArgs {
     pub host: &'static str,
@@ -22,7 +21,12 @@ pub struct PostgresArgs {
     pub user: &'static str,
     pub password: &'static str,
     pub db: &'static str,
+    // TODO(ops): wire TLS (PgSslMode::VerifyFull + ssl_root_cert) once the prod
+    // Postgres lands; unused for now since local dev uses plain connections.
+    #[allow(dead_code)]
     pub cert: Option<&'static str>,
+    pub pool_size: u32,
+    pub acquire_timeout: u64,
 }
 
 #[allow(dead_code)]
@@ -65,6 +69,14 @@ struct RawProgramArgs {
     /// postgres ssl certificate
     #[argh(option, env = "POSTGRES_CERT", from_str_fn(parse_static_str))]
     postgres_cert: Option<&'static str>,
+
+    /// postgres connection pool size
+    #[argh(option, default = "5", env = "POSTGRES_POOL_SIZE")]
+    postgres_pool_size: u32,
+
+    /// postgres acquire timeout in seconds
+    #[argh(option, default = "5", env = "POSTGRES_ACQUIRE_TIMEOUT")]
+    postgres_acquire_timeout: u64,
 }
 
 impl From<RawProgramArgs> for ProgramArgs {
@@ -81,6 +93,8 @@ impl From<RawProgramArgs> for ProgramArgs {
                 password: args.postgres_password,
                 db: args.postgres_db,
                 cert: args.postgres_cert,
+                pool_size: args.postgres_pool_size,
+                acquire_timeout: args.postgres_acquire_timeout,
             },
         }
     }

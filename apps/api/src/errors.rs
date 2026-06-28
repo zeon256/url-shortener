@@ -1,5 +1,7 @@
 use thiserror::Error;
 
-#[allow(dead_code)]
-#[derive(Debug, Clone, PartialEq, Eq, Error)]
-pub enum ShortenerError {}
+#[derive(Debug, Error)]
+pub enum ShortenerError {
+    #[error("failed to connect to Postgres")]
+    PostgresConnect(#[source] sqlx::Error),
+}

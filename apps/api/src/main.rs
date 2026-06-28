@@ -1,4 +1,5 @@
 mod cli;
+mod db;
 mod errors;
 mod routes;
 
@@ -14,10 +15,12 @@ async fn main() -> anyhow::Result<()> {
 
     let ProgramArgs {
         server: _,
-        postgres: _,
+        postgres,
     } = cli::from_env();
 
-    info!("Hello, world!");
+    let pool = db::connect(postgres).await?;
+    sqlx::migrate!("./migrations").run(&pool).await?;
+    info!("connected to Postgres; migrations applied");
 
     Ok(())
 }
