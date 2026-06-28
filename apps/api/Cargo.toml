@@ -1,6 +1,10 @@
 [package]
 name = "api"
+<<<<<<< Updated upstream
 version = "0.1.0"
+=======
+version = "0.1.2"
+>>>>>>> Stashed changes
 edition = "2024"
 
 [dependencies]
