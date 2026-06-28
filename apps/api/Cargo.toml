@@ -15,6 +15,7 @@ axum = "0.8.9"
 argh = { git = "https://github.com/zeon256/argh.git" }
 thiserror = "2.0.18"
 anyhow = "1.0.103"
+rand = "0.10.1"
 
 [workspace.metadata.dylint]
 libraries = [{ git = "https://github.com/zeon256/style-rust-aku", branch = "main" }]
