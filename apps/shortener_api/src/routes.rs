@@ -32,7 +32,7 @@ struct AppState {
 pub fn router(pool: PgPool) -> Router {
     Router::new()
         .route("/healthz", get(healthz))
-        .route("/v1/shorten", post(shorten))
+        .route("/api/v1/shorten", post(shorten))
         .route("/{code}", get(redirect))
         .with_state(AppState { pool })
         .layer(TraceLayer::new_for_http())

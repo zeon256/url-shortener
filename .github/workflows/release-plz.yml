@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - "apps/shortener-api/**"
+      - "apps/shortener_api/**"
       - ".github/actions/setup-rust/**"
       - ".github/workflows/release-plz.yml"
   workflow_dispatch:
@@ -33,7 +33,7 @@ jobs:
         uses: release-plz/action@49c995b2442b0f60dd4aab07a164cc00643471fc # v0.5.128
         with:
           command: release
-          manifest_path: apps/api/Cargo.toml
+          manifest_path: apps/shortener_api/Cargo.toml
           version: "0.3.157"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -61,7 +61,7 @@ jobs:
         uses: release-plz/action@49c995b2442b0f60dd4aab07a164cc00643471fc # v0.5.128
         with:
           command: release-pr
-          manifest_path: apps/api/Cargo.toml
+          manifest_path: apps/shortener_api/Cargo.toml
           version: "0.3.157"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

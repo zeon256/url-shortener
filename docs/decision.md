@@ -27,8 +27,8 @@ Request:  { "url": "https://example.gov.sg/x" }
 
 - `short_url` is the full link clients display; `short_code` is the raw code.
 - The short link is served by the **API host** (`GET /:code` → 302), not the web
-  app's origin. The mock currently uses `window.location.origin`; #12b replaces
-  this with the API base (`VITE_API_BASE_URL`).
+  app's origin. The client targets `${VITE_BACKEND_URL}/api/v1/shorten`, where
+  `VITE_BACKEND_URL` defaults to `http://localhost:4002` for local dev (see #20).
 
 ### `links` table (from #5)
 
