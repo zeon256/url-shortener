@@ -17,11 +17,11 @@ inputs:
   workspaces:
     description: "Cargo workspaces and target directories for rust-cache"
     required: false
-    default: "apps/api -> target"
+    default: "apps/shortener_api -> target"
   working-directory:
     description: "Directory containing the Rust crate"
     required: false
-    default: "apps/api"
+    default: "apps/shortener_api"
   dylint-components:
     description: "Rust components to install for Dylint toolchains (comma-separated)"
     required: false

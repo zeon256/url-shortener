@@ -1,55 +1,61 @@
-const alphabet = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
-
-function wait(milliseconds: number) {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
-}
-
-export function makeShortCode(input: string) {
-  let hash = 2166136261;
-
-  for (let index = 0; index < input.length; index += 1) {
-    hash ^= input.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-
-  let value = hash >>> 0;
-  let code = "";
-
-  do {
-    code = alphabet[value % alphabet.length] + code;
-    value = Math.floor(value / alphabet.length);
-  } while (value > 0);
-
-  return code.padStart(6, "0").slice(0, 7);
-}
+const BACKEND_URL = (
+  import.meta.env.VITE_BACKEND_URL || "http://localhost:4002"
+).replace(/\/+$/, "");
 
 export interface ShortenResult {
   shortUrl: string;
   shortCode: string;
 }
 
-// Client seam for the URL shortener. The signature and result shape match the
-// assumed `POST /api/v1/shorten` contract (see docs/decision.md), so wiring the
-// real API later (#12b) only swaps this body, not the call sites.
-//
-// Current implementation is a local mock (no backend dependency) — see #12.
+interface ShortenSuccessBody {
+  short_code?: string;
+  original_url?: string;
+}
+
+interface ShortenErrorBody {
+  error?: { message?: string };
+}
+
+// Calls the backend shortener API at `${VITE_BACKEND_URL}/api/v1/shorten`
+// (base defaults to http://localhost:4002 for local dev). The request/response
+// shape is documented in docs/decision.md. The response carries `short_code`
+// and `original_url`; the displayable short link is the API host itself serving
+// `GET /:code` → 302, so we build `shortUrl` as `${BACKEND_URL}/${short_code}`.
 export async function shortenUrl(input: string): Promise<ShortenResult> {
-  await wait(650);
-
-  let parsedUrl: URL;
+  let response: Response;
   try {
-    parsedUrl = new URL(input.trim());
+    response = await fetch(`${BACKEND_URL}/api/v1/shorten`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: input.trim() }),
+    });
   } catch {
-    throw new Error("Enter a full URL, including https:// or http://.");
+    throw new Error(
+      "Could not reach the server. Check your connection and try again.",
+    );
   }
 
-  if (parsedUrl.protocol !== "https:" && parsedUrl.protocol !== "http:") {
-    throw new Error("Only http:// and https:// URLs can be shortened.");
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response));
   }
 
-  const shortCode = makeShortCode(parsedUrl.href);
+  const body = (await response.json()) as ShortenSuccessBody;
+  if (!body.short_code || !body.original_url) {
+    throw new Error("The server returned an unexpected response.");
+  }
+
   return {
-    shortUrl: `${window.location.origin}/${shortCode}`,
-    shortCode,
+    shortUrl: `${BACKEND_URL}/${body.short_code}`,
+    shortCode: body.short_code,
   };
+}
+
+async function readErrorMessage(response: Response): Promise<string> {
+  try {
+    const body = (await response.json()) as ShortenErrorBody;
+    if (body.error?.message) return body.error.message;
+  } catch {
+    // Response body was not JSON; fall through to the generic message.
+  }
+  return "Unable to shorten this URL. Please try again.";
 }
