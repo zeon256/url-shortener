@@ -1,0 +1,22 @@
+{
+  "$schema": "https://oxc-project.github.io/oxlint-schema.json",
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn"
+  },
+  "plugins": ["typescript", "jsx-a11y", "import"],
+  "env": {
+    "browser": true,
+    "es2024": true
+  },
+  "overrides": [
+    {
+      "files": ["vite.config.ts"],
+      "env": { "node": true }
+    },
+    {
+      "files": ["src/index.tsx"],
+      "rules": { "import/no-unassigned-import": "off" }
+    }
+  ]
+}
