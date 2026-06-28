@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - "apps/api/**"
+      - "apps/shortener-api/**"
       - ".github/actions/setup-rust/**"
       - ".github/workflows/release-plz.yml"
   workflow_dispatch:

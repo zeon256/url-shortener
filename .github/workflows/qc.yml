@@ -3,7 +3,7 @@ name: Quality Checks
 on:
   pull_request:
     paths:
-      - "apps/api/**"
+      - "apps/shortener_api/**"
       - ".github/actions/setup-rust/**"
       - ".github/workflows/qc.yml"
 
@@ -12,7 +12,7 @@ permissions:
 
 defaults:
   run:
-    working-directory: apps/api
+    working-directory: apps/shortener_api
 
 jobs:
   fmt:
