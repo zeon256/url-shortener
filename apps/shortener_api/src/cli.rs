@@ -11,6 +11,7 @@ pub struct ProgramArgs {
 pub struct ServerArgs {
     pub port: u16,
     pub address: &'static str,
+    pub host: &'static str,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -28,7 +29,6 @@ pub struct PostgresArgs {
     pub acquire_timeout: u64,
 }
 
-#[allow(dead_code)]
 #[derive(FromArgs, Clone, Debug)]
 /// url-shortener backend
 struct RawProgramArgs {
@@ -88,6 +88,7 @@ impl From<RawProgramArgs> for ProgramArgs {
             server: ServerArgs {
                 port: args.port,
                 address: args.address,
+                host: args.host,
             },
             postgres: PostgresArgs {
                 host: args.postgres_host,
@@ -112,7 +113,7 @@ const fn default_address() -> &'static str {
     "0.0.0.0"
 }
 
-#[allow(clippy::unnecessary_wraps, dead_code)]
+#[allow(clippy::unnecessary_wraps)]
 fn parse_static_str(s: &str) -> Result<&'static str, String> {
     let s = s.to_string().into_boxed_str();
     let s: &'static str = Box::leak(s);
@@ -134,6 +135,7 @@ fn parse_public_host(s: &str) -> Result<&'static str, String> {
 
     let url = Url::parse(&format!("https://{s}"))
         .map_err(|_| "HOST must be a host name with an optional port".to_string())?;
+
     let host_only = url.host_str().is_some()
         && url.username().is_empty()
         && url.password().is_none()

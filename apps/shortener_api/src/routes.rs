@@ -7,7 +7,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
-use tower_http::trace::TraceLayer;
+use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use url::Url;
 
 use crate::db;
@@ -29,13 +29,44 @@ struct AppState {
     pool: PgPool,
 }
 
-pub fn router(pool: PgPool) -> Router {
+pub fn router(pool: PgPool, public_host: &'static str) -> Router {
+    let cors = cors_layer(public_host);
+
     Router::new()
         .route("/healthz", get(healthz))
         .route("/api/v1/shorten", post(shorten))
         .route("/{code}", get(redirect))
         .with_state(AppState { pool })
         .layer(TraceLayer::new_for_http())
+        .layer(cors)
+}
+
+/// Build a CORS layer that accepts any Origin whose host matches `public_host`.
+/// Parsing the header as a URL (not a naive `ends_with`) closes the
+/// trailing-domain spoofing hole (e.g. `attackershort.inve.rs` or
+/// `short.inve.rs.evil.com`). Methods and headers are unconstrained so the
+/// client can send its JSON POST without extra config.
+fn cors_layer(public_host: &'static str) -> CorsLayer {
+    use axum::http::HeaderValue;
+    use tower_http::cors::{AllowOrigin, Any, CorsLayer};
+    use url::Url;
+
+    let allowed_host = Url::parse(&format!("https://{public_host}"))
+        .expect("public host should be validated by CLI")
+        .host_str()
+        .expect("public host should include a host name")
+        .to_owned();
+
+    CorsLayer::new()
+        .allow_origin(AllowOrigin::predicate(move |origin: &HeaderValue, _| {
+            origin
+                .to_str()
+                .ok()
+                .and_then(|s| Url::parse(s).ok())
+                .is_some_and(|u| u.host_str() == Some(allowed_host.as_str()))
+        }))
+        .allow_methods(Any)
+        .allow_headers(Any)
 }
 
 #[tracing::instrument]
