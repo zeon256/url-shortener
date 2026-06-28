@@ -8,6 +8,7 @@ on:
       - "apps/shortener_api/**"
       - ".github/actions/setup-rust/**"
       - ".github/workflows/release-plz.yml"
+      - "release-plz.toml"
   workflow_dispatch:
 
 jobs:
@@ -18,7 +19,6 @@ jobs:
     permissions:
       contents: write
       pull-requests: read
-      id-token: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
@@ -34,6 +34,7 @@ jobs:
         with:
           command: release
           manifest_path: apps/shortener_api/Cargo.toml
+          config: release-plz.toml
           version: "0.3.157"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -62,6 +63,7 @@ jobs:
         with:
           command: release-pr
           manifest_path: apps/shortener_api/Cargo.toml
+          config: release-plz.toml
           version: "0.3.157"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
