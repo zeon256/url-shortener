@@ -2,6 +2,7 @@ mod cli;
 mod db;
 mod errors;
 mod routes;
+mod shortcode;
 
 use cli::ProgramArgs;
 use tracing::info;
