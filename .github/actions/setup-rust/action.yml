@@ -38,6 +38,10 @@ inputs:
     description: "Rust components to install for Dylint toolchains (comma-separated)"
     required: false
     default: ""
+  additional-targets:
+    description: "Additional Rust targets to install (space- or comma-separated)"
+    required: false
+    default: ""
 
 runs:
   using: "composite"
@@ -47,6 +51,11 @@ runs:
       with:
         toolchain: ${{ inputs.toolchain }}
         components: ${{ inputs.components }}
+
+    - name: Add Rust targets
+      if: ${{ inputs.additional-targets != '' }}
+      shell: bash
+      run: rustup target add ${{ inputs.additional-targets }}
 
     - name: Setup Mold linker
       if: ${{ inputs.install-mold == 'true' }}

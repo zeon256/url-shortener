@@ -69,3 +69,165 @@ jobs:
           version: "0.3.159"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  release-gate:
+    name: Release gate
+    needs: release-plz-release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      should_run: ${{ steps.check.outputs.should_run }}
+      tag: ${{ steps.check.outputs.tag }}
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Fetch tags
+        run: git fetch --tags --force
+
+      - name: Check for release tag at this commit
+        id: check
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag=$(git tag --points-at "$GITHUB_SHA" | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+' | head -n1 || true)
+          if [ -n "$tag" ]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            echo "tag=$tag" >> "$GITHUB_OUTPUT"
+            echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+            echo "No release tag points at $GITHUB_SHA; skipping publish."
+          fi
+
+  build:
+    name: Build release binaries
+    needs: release-gate
+    if: needs.release-gate.outputs.should_run == 'true'
+    uses: ./.github/workflows/rust-build.yml
+    with:
+      toolchain: nightly
+      build-targets: '[{"name":"AMD64","triple":"x86_64-unknown-linux-gnu"},{"name":"ARM64","triple":"aarch64-unknown-linux-gnu"}]'
+      binary-name: shortener_api
+      release: true
+      version: ${{ needs.release-gate.outputs.version }}
+      working-directory: .
+      cache-prefix: release
+    secrets: inherit
+
+  upload-release-assets:
+    name: Attach binaries to release
+    needs: [build, release-gate]
+    if: needs.release-gate.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Download binary artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: dist
+
+      - name: Rename binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          v="${{ needs.release-gate.outputs.version }}"
+          mkdir -p release
+          cp "dist/shortener_api-AMD64/shortener_api" "release/shortener_api-amd64-v${v}"
+          cp "dist/shortener_api-ARM64/shortener_api" "release/shortener_api-arm64-v${v}"
+
+      - name: Upload assets to GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ needs.release-gate.outputs.tag }}" release/* --clobber
+
+  docker-image:
+    name: Build and push image
+    needs: [build, release-gate]
+    if: needs.release-gate.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Download amd64 binary
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: shortener_api-AMD64
+          path: apps/shortener_api/target/x86_64-unknown-linux-gnu/release
+
+      - name: Download arm64 binary
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: shortener_api-ARM64
+          path: apps/shortener_api/target/aarch64-unknown-linux-gnu/release
+
+      - name: Ensure binaries are executable
+        shell: bash
+        run: |
+          chmod +x apps/shortener_api/target/x86_64-unknown-linux-gnu/release/shortener_api
+          chmod +x apps/shortener_api/target/aarch64-unknown-linux-gnu/release/shortener_api
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+
+      - name: Login to GHCR
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push multi-arch image
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        with:
+          context: apps/shortener_api
+          file: apps/shortener_api/Dockerfile.ci
+          platforms: linux/amd64,linux/arm64
+          push: true
+          secrets: |
+            "github_token=${{ secrets.GITHUB_TOKEN }}"
+          build-args: |
+            VERSION=${{ needs.release-gate.outputs.version }}
+          tags: |
+            ghcr.io/zeon256/shortener-api:${{ needs.release-gate.outputs.version }}
+            ghcr.io/zeon256/shortener-api:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  trivy-scan:
+    name: Scan image (Trivy)
+    needs: [docker-image, release-gate]
+    if: needs.release-gate.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Login to GHCR
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Trivy scan
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ghcr.io/zeon256/shortener-api:${{ needs.release-gate.outputs.version }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
