@@ -1,0 +1,38 @@
+FROM node:24-bookworm AS builder
+
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+
+WORKDIR /app
+
+RUN corepack enable
+
+COPY apps/web/package.json apps/web/pnpm-lock.yaml apps/web/pnpm-workspace.yaml ./
+RUN pnpm install --frozen-lockfile
+
+COPY apps/web/index.html apps/web/tsconfig.json apps/web/vite.config.ts ./
+COPY apps/web/src ./src
+
+ARG VITE_BACKEND_URL
+ENV VITE_BACKEND_URL=$VITE_BACKEND_URL
+RUN pnpm run build
+
+
+FROM redhat/ubi10-minimal AS runner
+
+RUN microdnf install -y nginx shadow-utils && \
+    useradd --system --uid 1001 --gid 0 appuser && \
+    microdnf clean all
+
+COPY apps/web/nginx.conf /etc/nginx/nginx.conf
+COPY --from=builder /app/dist /usr/share/nginx/html
+
+RUN mkdir -p /var/log/nginx && \
+    chown -R appuser:0 /usr/share/nginx/html /var/log/nginx && \
+    chmod -R g=u /usr/share/nginx/html /var/log/nginx
+
+USER appuser
+
+EXPOSE 8080
+
+CMD ["nginx", "-g", "daemon off;"]

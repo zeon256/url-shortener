@@ -22,6 +22,14 @@ inputs:
     description: "Directory containing the Rust crate"
     required: false
     default: "."
+  install-mold:
+    description: "Whether to install mold as the default linker"
+    required: false
+    default: "false"
+  mold-version:
+    description: "mold version to install"
+    required: false
+    default: "2.41.0"
   install-dylint:
     description: "Whether to install cargo-dylint and dylint-link"
     required: false
@@ -39,6 +47,13 @@ runs:
       with:
         toolchain: ${{ inputs.toolchain }}
         components: ${{ inputs.components }}
+
+    - name: Setup Mold linker
+      if: ${{ inputs.install-mold == 'true' }}
+      uses: rui314/setup-mold@9c9c13bf4c3f1adef0cc596abc155580bcb04444 # v1
+      with:
+        mold-version: ${{ inputs.mold-version }}
+        make-default: true
 
     - name: Install cargo-dylint and dylint-link
       if: ${{ inputs.install-dylint == 'true' || inputs.dylint-components != '' }}

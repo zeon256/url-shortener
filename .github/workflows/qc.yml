@@ -5,9 +5,9 @@ on:
     paths:
       - "Cargo.lock"
       - "Cargo.toml"
-      - "apps/shortener_api/**"
-      - ".github/actions/setup-rust/**"
-      - ".github/workflows/qc.yml"
+      - "apps/shortener_api/Cargo.toml"
+      - "apps/shortener_api/migrations/**"
+      - "apps/shortener_api/src/**"
 
 permissions:
   contents: read
