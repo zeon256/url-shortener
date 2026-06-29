@@ -34,6 +34,9 @@ jobs:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
       - name: Setup Rust
         uses: ./.github/actions/setup-rust
+        with:
+          toolchain: nightly
+          install-mold: "true"
       - name: Clippy
         run: cargo clippy --all-targets --all-features -- -D warnings -D clippy::pedantic -D clippy::perf
 
@@ -45,6 +48,8 @@ jobs:
       - name: Setup Rust
         uses: ./.github/actions/setup-rust
         with:
+          toolchain: nightly
+          install-mold: "true"
           install-dylint: "true"
           dylint-components: rustfmt
       - name: Dylint
@@ -57,5 +62,8 @@ jobs:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
       - name: Setup Rust
         uses: ./.github/actions/setup-rust
+        with:
+          toolchain: nightly
+          install-mold: "true"
       - name: Test
         run: cargo test

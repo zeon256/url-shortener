@@ -1,0 +1,93 @@
+name: Reusable Rust Build
+
+on:
+  workflow_call:
+    inputs:
+      toolchain:
+        description: "Rust toolchain version"
+        required: false
+        type: string
+        default: "stable"
+      working-directory:
+        description: "Working directory for the Rust project"
+        required: false
+        type: string
+        default: "."
+      cache-prefix:
+        description: "Cache key prefix"
+        required: false
+        type: string
+        default: "cargo"
+      build-targets:
+        description: "Build targets as JSON array of {name, triple} objects"
+        required: true
+        type: string
+      binary-name:
+        description: "Name of the binary to build"
+        required: false
+        type: string
+        default: "shortener_api"
+      release:
+        description: "Build in release mode"
+        required: false
+        type: boolean
+        default: true
+      version:
+        description: "Version tag used for artifact naming"
+        required: false
+        type: string
+        default: "dev"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build (${{ matrix.target.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJson(inputs.build-targets) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Setup cross-compilation toolchain
+        if: contains(inputs.build-targets, 'aarch64-unknown-linux-gnu')
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu libc6-dev-arm64-cross binutils-aarch64-linux-gnu
+
+      - name: Setup Rust Environment
+        uses: ./.github/actions/setup-rust
+        with:
+          toolchain: ${{ inputs.toolchain }}
+          cache-key: ${{ inputs.cache-prefix }}-${{ matrix.target.triple }}
+          additional-targets: ${{ matrix.target.triple }}
+          install-mold: ${{ matrix.target.triple == 'x86_64-unknown-linux-gnu' }}
+
+      - name: Build (${{ matrix.target.name }})
+        shell: bash
+        working-directory: ${{ inputs.working-directory }}
+        run: cargo build --workspace ${{ inputs.release && '--release' || '' }} --target ${{ matrix.target.triple }}
+
+      - name: Strip binary
+        shell: bash
+        working-directory: ${{ inputs.working-directory }}
+        run: |
+          set -euo pipefail
+          bin="target/${{ matrix.target.triple }}/${{ inputs.release && 'release' || 'debug' }}/${{ inputs.binary-name }}"
+          if [ "${{ matrix.target.triple }}" = "aarch64-unknown-linux-gnu" ]; then
+            aarch64-linux-gnu-strip "$bin"
+          else
+            strip "$bin"
+          fi
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ inputs.binary-name }}-${{ matrix.target.name }}
+          path: ${{ inputs.working-directory }}/target/${{ matrix.target.triple }}/${{ inputs.release && 'release' || 'debug' }}/${{ inputs.binary-name }}
+          if-no-files-found: error
