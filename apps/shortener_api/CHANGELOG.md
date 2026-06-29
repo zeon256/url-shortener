@@ -15,6 +15,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Other
 
+- release v0.1.1
+- complete github actions
+- dockerfiles + docker-compose
+
+## [0.1.1](https://github.com/zeon256/url-shortener/compare/v0.1.0...v0.1.1) - 2026-06-29
+
+### Fixed
+
+- *(api)* add missing cors
+
+### Other
+
 - complete github actions
 - dockerfiles + docker-compose
 
