@@ -12,6 +12,9 @@ pub struct ServerArgs {
     pub port: u16,
     pub address: &'static str,
     pub cors_allowed_origins: &'static [&'static str],
+    /// Public host of this shortener (`host[:port]`), used to reject shortening
+    /// URLs that point back at the service. Distinct from `cors_allowed_origins`.
+    pub host: &'static str,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -48,6 +51,10 @@ struct RawProgramArgs {
     /// comma-separated list of CORS-allowed origins (<scheme://host[:port]>)
     #[argh(option, env = "CORS_ALLOWED_ORIGINS", from_str_fn(parse_cors_origins))]
     cors_allowed_origins: &'static [&'static str],
+
+    /// public host of this shortener, used to reject self-referential URLs
+    #[argh(option, env = "HOST", from_str_fn(parse_public_host))]
+    host: &'static str,
 
     /// postgres host
     #[argh(option, env = "POSTGRES_HOST", from_str_fn(parse_static_str))]
@@ -89,6 +96,7 @@ impl From<RawProgramArgs> for ProgramArgs {
                 port: args.port,
                 address: args.address,
                 cors_allowed_origins: args.cors_allowed_origins,
+                host: args.host,
             },
             postgres: PostgresArgs {
                 host: args.postgres_host,
@@ -166,9 +174,43 @@ fn parse_cors_origins(s: &str) -> Result<&'static [&'static str], String> {
     Ok(Box::leak(origins.into_boxed_slice()))
 }
 
+/// Validate the shortener's own public host: a bare `host[:port]` with no scheme,
+/// path, query, fragment, or userinfo. Used to reject self-referential shortens.
+fn parse_public_host(s: &str) -> Result<&'static str, String> {
+    if s.is_empty() {
+        return Err("HOST must not be empty".to_string());
+    }
+
+    if s.trim() != s {
+        return Err("HOST must not contain leading or trailing whitespace".to_string());
+    }
+
+    if s.contains('/') {
+        return Err("HOST must not include a scheme or path".to_string());
+    }
+
+    let url = Url::parse(&format!("https://{s}"))
+        .map_err(|_| "HOST must be a host name with an optional port".to_string())?;
+
+    let host_only = url.host_str().is_some()
+        && url.username().is_empty()
+        && url.password().is_none()
+        && url.path() == "/"
+        && url.query().is_none()
+        && url.fragment().is_none();
+
+    if !host_only {
+        return Err(
+            "HOST must be a host name with an optional port, without scheme or path".to_string(),
+        );
+    }
+
+    parse_static_str(s)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::parse_cors_origins;
+    use super::{parse_cors_origins, parse_public_host};
 
     #[test]
     fn parse_cors_origins_accepts_single_and_multiple_origins() {
@@ -207,6 +249,30 @@ mod tests {
             assert!(
                 parse_cors_origins(value).is_err(),
                 "{value:?} should be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn parse_public_host_accepts_host_with_optional_port() {
+        for host in ["example.com", "api.example.com:443", "localhost:4002"] {
+            assert_eq!(parse_public_host(host).expect("host should parse"), host);
+        }
+    }
+
+    #[test]
+    fn parse_public_host_rejects_url_or_path_values() {
+        for host in [
+            "",
+            "https://example.com",
+            "example.com/path",
+            "example.com/",
+            "example.com?debug=true",
+            "user@example.com",
+        ] {
+            assert!(
+                parse_public_host(host).is_err(),
+                "{host:?} should be rejected"
             );
         }
     }
