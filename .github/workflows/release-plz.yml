@@ -81,21 +81,15 @@ jobs:
       tag: ${{ steps.check.outputs.tag }}
       version: ${{ steps.check.outputs.version }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Fetch tags
-        run: git fetch --tags --force
-
       - name: Check for release tag at this commit
         id: check
-        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          tag=$(git tag --points-at "$GITHUB_SHA" | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+' | head -n1 || true)
+          tag=$(gh api "repos/${{ github.repository }}/tags" --paginate \
+                --jq '.[] | select(.commit.sha == env.GITHUB_SHA) | .name' \
+                | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+' | head -n1 || true)
           if [ -n "$tag" ]; then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
             echo "tag=$tag" >> "$GITHUB_OUTPUT"
