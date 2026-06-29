@@ -8,8 +8,6 @@ use cli::ProgramArgs;
 use tokio::net::TcpListener;
 use tracing::info;
 
-use crate::cli::ServerArgs;
-
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // initialize tracing subscriber
@@ -17,23 +15,15 @@ async fn main() -> anyhow::Result<()> {
         .with_env_filter("shortener_api=debug,warn,tower_http=debug")
         .init();
 
-    let ProgramArgs {
-        server:
-            ServerArgs {
-                address,
-                port,
-                cors_allowed_origins,
-            },
-        postgres,
-    } = cli::from_env();
+    let ProgramArgs { server, postgres } = cli::from_env();
 
     let pool = db::connect(postgres).await?;
     sqlx::migrate!("./migrations").run(&pool).await?;
     info!("connected to Postgres; migrations applied");
 
-    let app = routes::router(pool, cors_allowed_origins);
+    let app = routes::router(pool, server);
 
-    let addr = format!("{address}:{port}");
+    let addr = format!("{}:{}", server.address, server.port);
     let listener = TcpListener::bind(&addr).await?;
 
     axum::serve(listener, app).await?;

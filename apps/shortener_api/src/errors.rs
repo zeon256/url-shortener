@@ -20,6 +20,9 @@ pub enum Error {
     #[error("url does not exist")]
     RedirectNotFound,
 
+    #[error("self-referential URL")]
+    SelfReferentialUrl,
+
     #[error("unsupported URL scheme")]
     UnsupportedUrlScheme,
 }
@@ -40,7 +43,7 @@ impl Error {
             Self::PostgresConnect(_) | Self::Database(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Self::CodeGenerationExhausted { .. } => StatusCode::SERVICE_UNAVAILABLE,
             Self::RedirectNotFound => StatusCode::NOT_FOUND,
-            Self::UnsupportedUrlScheme => StatusCode::BAD_REQUEST,
+            Self::SelfReferentialUrl | Self::UnsupportedUrlScheme => StatusCode::BAD_REQUEST,
         }
     }
 
@@ -49,6 +52,7 @@ impl Error {
             Self::PostgresConnect(_) | Self::Database(_) => "Unable to shorten this URL.",
             Self::CodeGenerationExhausted { .. } => "Unable to shorten this URL right now.",
             Self::RedirectNotFound => "This short link does not exist.",
+            Self::SelfReferentialUrl => "Short links cannot point back to this service.",
             Self::UnsupportedUrlScheme => "Only http:// and https:// URLs can be shortened.",
         }
     }
@@ -60,7 +64,7 @@ impl Error {
             Self::CodeGenerationExhausted { attempts } => {
                 error!(attempts, "failed to generate unique short code");
             }
-            Self::UnsupportedUrlScheme | Self::RedirectNotFound => {}
+            Self::RedirectNotFound | Self::SelfReferentialUrl | Self::UnsupportedUrlScheme => {}
         }
     }
 }

@@ -10,8 +10,8 @@ use sqlx::PgPool;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use url::Url;
 
-use crate::db;
 use crate::errors::Error;
+use crate::{cli::ServerArgs, db};
 
 #[derive(Debug, Deserialize)]
 pub struct ShortenBody {
@@ -27,16 +27,17 @@ pub struct ShortenResponse {
 #[derive(Clone)]
 struct AppState {
     pool: PgPool,
+    server_args: ServerArgs,
 }
 
-pub fn router(pool: PgPool, cors_allowed_origins: &'static [&'static str]) -> Router {
-    let cors = cors_layer(cors_allowed_origins);
+pub fn router(pool: PgPool, server_args: ServerArgs) -> Router {
+    let cors = cors_layer(server_args.cors_allowed_origins);
 
     Router::new()
         .route("/healthz", get(healthz))
         .route("/api/v1/shorten", post(shorten))
         .route("/{code}", get(redirect))
-        .with_state(AppState { pool })
+        .with_state(AppState { pool, server_args })
         .layer(TraceLayer::new_for_http())
         .layer(cors)
 }
@@ -70,9 +71,7 @@ async fn shorten(
     State(state): State<AppState>,
     Json(ShortenBody { url }): Json<ShortenBody>,
 ) -> Result<impl IntoResponse, Error> {
-    if !matches!(url.scheme(), "http" | "https") {
-        return Err(Error::UnsupportedUrlScheme);
-    }
+    validate_url(&url, state.server_args.host)?;
 
     let url = normalize(url);
 
@@ -89,6 +88,35 @@ async fn shorten(
     };
 
     Ok((status, Json(response)))
+}
+
+fn validate_url(url: &Url, public_host: &'static str) -> Result<(), Error> {
+    if !matches!(url.scheme(), "http" | "https") {
+        return Err(Error::UnsupportedUrlScheme);
+    }
+
+    if is_public_host(url, public_host) {
+        return Err(Error::SelfReferentialUrl);
+    }
+
+    Ok(())
+}
+
+fn is_public_host(url: &Url, public_host: &'static str) -> bool {
+    let public_url = Url::parse(&format!("https://{public_host}"))
+        .expect("public host should be validated by CLI");
+    let Some(public_host) = public_url.host_str() else {
+        return false;
+    };
+
+    if url.host_str() != Some(public_host) {
+        return false;
+    }
+
+    match public_url.port() {
+        Some(public_port) => url.port_or_known_default() == Some(public_port),
+        None => true,
+    }
 }
 
 /// Canonicalize a parsed URL so links that are technically the same dedup to one
@@ -135,11 +163,63 @@ async fn redirect(
 
 #[cfg(test)]
 mod tests {
-    use super::normalize;
+    use super::{normalize, validate_url};
+    use crate::errors::Error;
     use url::Url;
 
     fn norm(input: &str) -> String {
         normalize(Url::parse(input).expect("valid test URL")).into()
+    }
+
+    fn parsed(input: &str) -> Url {
+        Url::parse(input).expect("valid test URL")
+    }
+
+    #[test]
+    fn rejects_unsupported_schemes() {
+        for input in [
+            "javascript:alert(1)",
+            "file:///tmp/link.txt",
+            "data:text/plain,hello",
+        ] {
+            assert!(
+                matches!(
+                    validate_url(&parsed(input), "short.inve.rs"),
+                    Err(Error::UnsupportedUrlScheme)
+                ),
+                "{input:?} should be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_self_referential_public_host() {
+        for input in [
+            "https://short.inve.rs/path",
+            "http://short.inve.rs/path",
+            "https://short.inve.rs:444/path",
+        ] {
+            assert!(
+                matches!(
+                    validate_url(&parsed(input), "short.inve.rs"),
+                    Err(Error::SelfReferentialUrl)
+                ),
+                "{input:?} should be rejected"
+            );
+        }
+
+        assert!(validate_url(&parsed("https://attackershort.inve.rs"), "short.inve.rs").is_ok());
+        assert!(validate_url(&parsed("https://short.inve.rs.evil.com"), "short.inve.rs").is_ok());
+    }
+
+    #[test]
+    fn respects_configured_public_port_for_self_reference() {
+        assert!(matches!(
+            validate_url(&parsed("http://localhost:4002/path"), "localhost:4002"),
+            Err(Error::SelfReferentialUrl)
+        ));
+        assert!(validate_url(&parsed("http://localhost:3000/path"), "localhost:4002").is_ok());
+        assert!(validate_url(&parsed("http://localhost/path"), "localhost:4002").is_ok());
     }
 
     #[test]
