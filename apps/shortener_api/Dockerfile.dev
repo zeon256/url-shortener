@@ -1,0 +1,26 @@
+FROM rust:1-bookworm AS builder
+
+WORKDIR /app
+
+COPY Cargo.toml Cargo.lock ./
+COPY apps ./apps
+
+RUN cargo build --release
+
+
+FROM redhat/ubi10-minimal AS runner
+
+RUN microdnf install -y shadow-utils && \
+    useradd --system --uid 1001 --gid 0 appuser && \
+    microdnf clean all
+
+COPY --from=builder /app/target/release/shortener_api /usr/local/bin/shortener_api
+
+RUN chmod +x /usr/local/bin/shortener_api
+
+USER appuser
+
+EXPOSE 8000
+
+ENTRYPOINT ["shortener_api"]
+CMD ["--port", "8000", "--address", "0.0.0.0"]

@@ -1,0 +1,27 @@
+# Create an intermediate stage to hold the pre-built binaries
+FROM scratch AS binaries
+COPY target/x86_64-unknown-linux-gnu/release/shortener_api /shortener_api-amd64
+COPY target/aarch64-unknown-linux-gnu/release/shortener_api /shortener_api-arm64
+
+
+# Final runner stage
+FROM redhat/ubi10-minimal AS runner
+
+# This build argument is automatically populated by Docker Buildx
+ARG TARGETPLATFORM
+
+# Conditionally copy the correct binary from the 'binaries' stage.
+# The expansion `${TARGETPLATFORM#linux/}` extracts the architecture (e.g., "amd64" or "arm64").
+COPY --from=binaries /shortener_api-${TARGETPLATFORM#linux/} /usr/local/bin/shortener_api
+
+RUN microdnf install -y shadow-utils && \
+    useradd --system --uid 1001 --gid 0 appuser && \
+    microdnf clean all
+
+RUN chmod +x /usr/local/bin/shortener_api
+
+USER appuser
+
+EXPOSE 8000
+ENTRYPOINT ["shortener_api"]
+CMD ["--port", "8000", "--address", "0.0.0.0"]

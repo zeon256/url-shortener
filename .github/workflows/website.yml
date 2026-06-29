@@ -3,8 +3,9 @@ name: Website
 on:
   pull_request:
     paths:
-      - "apps/web/**"
-      - ".github/workflows/website.yml"
+      - "apps/web/package.json"
+      - "apps/web/pnpm-lock.yaml"
+      - "apps/web/src/**"
 
 permissions:
   contents: read
