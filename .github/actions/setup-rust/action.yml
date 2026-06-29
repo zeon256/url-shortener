@@ -17,11 +17,15 @@ inputs:
   workspaces:
     description: "Cargo workspaces and target directories for rust-cache"
     required: false
-    default: "apps/shortener_api -> target"
+    default: ". -> target"
   working-directory:
     description: "Directory containing the Rust crate"
     required: false
-    default: "apps/shortener_api"
+    default: "."
+  install-dylint:
+    description: "Whether to install cargo-dylint and dylint-link"
+    required: false
+    default: "false"
   dylint-components:
     description: "Rust components to install for Dylint toolchains (comma-separated)"
     required: false
@@ -37,6 +41,7 @@ runs:
         components: ${{ inputs.components }}
 
     - name: Install cargo-dylint and dylint-link
+      if: ${{ inputs.install-dylint == 'true' || inputs.dylint-components != '' }}
       shell: bash
       run: |
         cargo install cargo-dylint

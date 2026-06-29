@@ -1,14 +1,12 @@
-use argh::FromArgs;
+use argh_env::FromArgs;
 use url::Url;
 
-#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct ProgramArgs {
     pub server: ServerArgs,
     pub postgres: PostgresArgs,
 }
 
-#[allow(dead_code)]
 #[derive(Clone, Copy, Debug)]
 pub struct ServerArgs {
     pub port: u16,
@@ -106,7 +104,7 @@ impl From<RawProgramArgs> for ProgramArgs {
 }
 
 pub fn from_env() -> ProgramArgs {
-    argh::from_env::<RawProgramArgs>().into()
+    argh_env::from_env::<RawProgramArgs>().into()
 }
 
 #[allow(dead_code)]

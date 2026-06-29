@@ -24,29 +24,32 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2a4385e2e34eb35d6b3efe798b9eb88096925d87726c0798709bf56d9ed84af3"
 
 [[package]]
-name = "argh"
-version = "0.1.20"
-source = "git+https://github.com/zeon256/argh.git#92e1c6a06c886890b920309b9ea17e1930bc237f"
+name = "argh-env"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a21756283da73dab8eacaa9d163d2187bdde95dc324c8f361516bb37515d55ee"
 dependencies = [
- "argh_derive",
- "argh_shared",
+ "argh-env-derive",
+ "argh-env-shared",
 ]
 
 [[package]]
-name = "argh_derive"
-version = "0.1.20"
-source = "git+https://github.com/zeon256/argh.git#92e1c6a06c886890b920309b9ea17e1930bc237f"
+name = "argh-env-derive"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e152319ecc3132e985a3fc991010f57a56e88499a168a6d33fccb035030edd01"
 dependencies = [
- "argh_shared",
+ "argh-env-shared",
  "proc-macro2",
  "quote",
  "syn",
 ]
 
 [[package]]
-name = "argh_shared"
-version = "0.1.20"
-source = "git+https://github.com/zeon256/argh.git#92e1c6a06c886890b920309b9ea17e1930bc237f"
+name = "argh-env-shared"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e04f5550bf66e5ef3a4ae5f7303e4e6e22345e3b6cfdc303a7f396d5a7025bed"
 dependencies = [
  "serde",
 ]
@@ -1241,7 +1244,7 @@ name = "shortener_api"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "argh",
+ "argh-env",
  "axum",
  "rand 0.10.1",
  "serde",
