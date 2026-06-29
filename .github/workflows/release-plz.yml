@@ -5,6 +5,8 @@ on:
     branches:
       - main
     paths:
+      - "Cargo.lock"
+      - "Cargo.toml"
       - "apps/shortener_api/**"
       - ".github/actions/setup-rust/**"
       - ".github/workflows/release-plz.yml"
@@ -33,9 +35,9 @@ jobs:
         uses: release-plz/action@49c995b2442b0f60dd4aab07a164cc00643471fc # v0.5.128
         with:
           command: release
-          manifest_path: apps/shortener_api/Cargo.toml
+          manifest_path: Cargo.toml
           config: release-plz.toml
-          version: "0.3.157"
+          version: "0.3.159"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -62,8 +64,8 @@ jobs:
         uses: release-plz/action@49c995b2442b0f60dd4aab07a164cc00643471fc # v0.5.128
         with:
           command: release-pr
-          manifest_path: apps/shortener_api/Cargo.toml
+          manifest_path: Cargo.toml
           config: release-plz.toml
-          version: "0.3.157"
+          version: "0.3.159"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
