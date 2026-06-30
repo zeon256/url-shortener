@@ -12,6 +12,7 @@ COPY apps/web/package.json ./apps/web/package.json
 RUN pnpm install --frozen-lockfile --filter web...
 
 COPY apps/web/index.html apps/web/tsconfig.json apps/web/vite.config.ts ./apps/web/
+COPY apps/web/public ./apps/web/public
 COPY apps/web/src ./apps/web/src
 
 ARG VITE_BACKEND_URL
