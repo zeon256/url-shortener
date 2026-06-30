@@ -3,7 +3,7 @@ import QRCode from "qrcode";
 export async function createQrCode(shortUrl: string) {
   return QRCode.toDataURL(shortUrl, {
     color: {
-      dark: "#0E0E0E",
+      dark: "#0a0b10",
       light: "#FFFFFF",
     },
     margin: 2,

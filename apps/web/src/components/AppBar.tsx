@@ -1,58 +1,68 @@
 import { Show } from "solid-js";
 
-type Status = "idle" | "loading" | "success" | "error";
+export type NavStatus = "checking" | "online" | "offline" | "working" | "error";
 
-export function AppBar(props: { status: Status }) {
+export function AppBar(props: { status: NavStatus }) {
   const label = () => {
     switch (props.status) {
-      case "loading":
+      case "checking":
+        return "checking";
+      case "online":
+        return "online";
+      case "offline":
+        return "offline";
+      case "working":
         return "working";
-      case "success":
-        return "ready";
       case "error":
         return "error";
-      default:
-        return "idle";
     }
   };
 
-  const dotClass = () => {
+  const ledClass = () => {
     switch (props.status) {
-      case "loading":
-        return "bg-sgds-cyan";
-      case "success":
-        return "bg-primary";
+      case "checking":
+        return "bg-border-bright";
+      case "online":
+        return "bg-accent";
+      case "offline":
+        return "bg-danger";
+      case "working":
+        return "bg-accent animate-pulse";
       case "error":
         return "bg-danger";
-      default:
-        return "bg-sgds-primary-500";
     }
+  };
+
+  const textClass = () => {
+    if (props.status === "error" || props.status === "offline") return "text-danger";
+    if (props.status === "online") return "text-accent";
+    return "text-ink-muted";
   };
 
   return (
-    <header class="sticky top-0 z-30 border-b border-border bg-surface/80 backdrop-blur supports-[backdrop-filter]:bg-surface/70">
-      <div class="mx-auto flex w-full max-w-3xl items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
-        <a class="flex items-center gap-2.5 press" href="/">
-          <span
-            aria-hidden
-            class="grid h-8 w-8 place-items-center rounded-lg border border-sgds-primary-200 bg-primary-muted text-sm font-semibold text-primary"
-          >
-            u/
-          </span>
-          <span class="text-sm font-semibold tracking-tight text-sgds-primary-900">
-            url.shortener
-          </span>
+    <header class="sticky top-0 z-30 border-b-2 border-border bg-surface/95 backdrop-blur supports-[backdrop-filter]:bg-surface/90">
+      <div class="mx-auto flex w-full max-w-2xl items-center justify-between gap-3 px-4 py-2.5 sm:px-6 lg:px-8">
+        <a class="press block min-w-0 shrink" href="/">
+          <img
+            alt="url-shortener"
+            class="logo-nav"
+            decoding="async"
+            height="341"
+            src="/logo.webp"
+            width="512"
+          />
         </a>
 
-        <Show when={props.status !== "idle"}>
-          <span class="inline-flex items-center gap-2 rounded-full border border-border bg-primary-muted px-3 py-1.5 text-xs font-medium text-primary">
-            <span class={`h-1.5 w-1.5 rounded-full ${dotClass()}`} aria-hidden />
-            <Show when={props.status === "loading"}>
-              <span class="spinner" aria-hidden />
-            </Show>
-            {label()}
-          </span>
-        </Show>
+        <span
+          class="inline-flex items-center gap-2 border-2 border-ink bg-surface px-2.5 py-1 font-mono text-[0.7rem] uppercase tracking-[0.14em] text-ink-muted"
+          role="status"
+        >
+          <span class={`h-1.5 w-1.5 ${ledClass()}`} aria-hidden />
+          <Show when={props.status === "working"}>
+            <span class="spinner text-accent" aria-hidden />
+          </Show>
+          <span class={textClass()}>{label()}</span>
+        </span>
       </div>
     </header>
   );

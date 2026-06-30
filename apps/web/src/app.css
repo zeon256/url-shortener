@@ -1,43 +1,40 @@
 @import "tailwindcss";
 
-@import "@fontsource/ibm-plex-sans/400.css";
-@import "@fontsource/ibm-plex-sans/500.css";
-@import "@fontsource/ibm-plex-sans/600.css";
-@import "@fontsource/ibm-plex-sans/700.css";
-@import "@fontsource/ibm-plex-sans/400-italic.css";
+@import "@fontsource/victor-mono/400.css";
+@import "@fontsource/victor-mono/600.css";
+@import "@fontsource/victor-mono/700.css";
 
 @theme {
-  --color-sgds-primary-100: #eff5fc;
-  --color-sgds-primary-200: #cee1f6;
-  --color-sgds-primary-500: #4288d6;
-  --color-sgds-primary-600: #356dac;
-  --color-sgds-primary-700: #285483;
-  --color-sgds-primary-800: #1e3e62;
-  --color-sgds-primary-900: #152b44;
-
-  --color-sgds-red: #f4333d;
-  --color-sgds-cyan: #00c0f3;
-  --color-sgds-magenta: #ba2fa2;
-  --color-sgds-black: #0e0e0e;
-  --color-sgds-white: #ffffff;
-
-  --color-canvas: #eff5fc;
+  /* Surface — logo sticker palette */
+  --color-canvas: #eef4ff;
   --color-surface: #ffffff;
-  --color-ink: #0e0e0e;
-  --color-ink-muted: #4b5563;
-  --color-border: #cee1f6;
-  --color-primary: #356dac;
-  --color-primary-hover: #285483;
-  --color-primary-muted: #eff5fc;
-  --color-danger: #f4333d;
+  --color-surface-2: #f5f8ff;
+  --color-accent-soft: #e3edff;
 
-  --radius-card: 1.5rem;
-  --radius-control: 0.875rem;
+  /* Lines */
+  --color-border: #c5d4ef;
+  --color-border-bright: #1060f0;
 
-  --shadow-card: 0 24px 80px rgb(21 43 68 / 0.14);
+  /* Ink */
+  --color-ink: #1a1a1a;
+  --color-ink-muted: #5c6778;
 
-  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system,
-    BlinkMacSystemFont, "Segoe UI", sans-serif;
+  /* Accent — logo blue + crab orange */
+  --color-accent: #1060f0;
+  --color-accent-dim: #cce4ff;
+  --color-accent-warm: #f04000;
+
+  --color-danger: #e02424;
+
+  --color-mac-close: #ff5f57;
+  --color-mac-minimize: #febc2e;
+  --color-mac-maximize: #28c840;
+
+  --radius-card: 0;
+  --radius-control: 0;
+
+  --font-sans: "Victor Mono", ui-monospace, "SF Mono", "Menlo", monospace;
+  --font-mono: "Victor Mono", ui-monospace, "SF Mono", "Menlo", monospace;
 }
 
 :root {
@@ -45,7 +42,6 @@
   background: var(--color-canvas);
   color-scheme: light;
   font-family: var(--font-sans);
-  font-feature-settings: "ss01", "cv01";
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -60,28 +56,102 @@ input {
   font: inherit;
 }
 
-::selection {
-  color: var(--color-sgds-white);
-  background: var(--color-sgds-primary-700);
+button:not(:disabled) {
+  cursor: pointer;
 }
 
-/* Atmosphere: faint SGDS-blue dot grid, restrained */
-.dot-grid {
+button:disabled {
+  cursor: not-allowed;
+}
+
+a[href] {
+  cursor: pointer;
+}
+
+::selection {
+  color: var(--color-ink);
+  background: var(--color-accent-dim);
+}
+
+/* Soft sky-blue canvas with faint logo-style sparkle dots */
+.grid-atmos {
   background-color: var(--color-canvas);
-  background-image: radial-gradient(
-      color-mix(in srgb, var(--color-sgds-primary-500) 22%, transparent 1px)
-        1px,
-      transparent 1px
+  background-image:
+    radial-gradient(
+      circle,
+      color-mix(in srgb, var(--color-accent) 28%, transparent) 1.25px,
+      transparent 1.25px
+    ),
+    radial-gradient(
+      circle,
+      color-mix(in srgb, var(--color-accent) 18%, transparent) 2px,
+      transparent 2px
+    ),
+    radial-gradient(
+      circle,
+      color-mix(in srgb, var(--color-accent-warm) 16%, transparent) 1.25px,
+      transparent 1.25px
     );
-  background-size: 22px 22px;
-  background-position: 0 0;
+  background-size:
+    24px 24px,
+    40px 40px,
+    52px 52px;
+  background-position:
+    0 0,
+    14px 22px,
+    6px 38px;
+}
+
+/* Sticker panels: white fill, bold outline, hard offset shadow */
+.sticker {
+  background: var(--color-surface);
+  border: 3px solid var(--color-ink);
+  box-shadow: 5px 5px 0 var(--color-accent);
+}
+
+.sticker-warm {
+  background: var(--color-accent-soft);
+  border: 3px solid var(--color-ink);
+  box-shadow: 5px 5px 0 var(--color-accent-warm);
+}
+
+.mac-dot {
+  display: block;
+  width: 0.75rem;
+  height: 0.75rem;
+  border: 1px solid rgb(0 0 0 / 0.12);
+  border-radius: 50%;
+}
+.mac-dot-close {
+  background: var(--color-mac-close);
+}
+.mac-dot-minimize {
+  background: var(--color-mac-minimize);
+}
+.mac-dot-maximize {
+  background: var(--color-mac-maximize);
+}
+
+.logo-hero {
+  display: block;
+  width: min(100%, clamp(11rem, 68vw, 26rem));
+  height: auto;
+  object-fit: contain;
+}
+
+.logo-nav {
+  display: block;
+  width: auto;
+  height: clamp(1.5rem, 2.5vw + 1rem, 2.25rem);
+  max-width: min(42vw, 9.5rem);
+  object-fit: contain;
 }
 
 /* ---- Motion ---- */
 @keyframes reveal-up {
   from {
     opacity: 0;
-    transform: translateY(14px);
+    transform: translateY(12px);
   }
   to {
     opacity: 1;
@@ -89,26 +159,14 @@ input {
   }
 }
 
-@keyframes reveal {
+@keyframes pop-in {
   from {
     opacity: 0;
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
-  }
-}
-
-@keyframes pop-in {
-  0% {
-    opacity: 0;
-    transform: translateY(10px) scale(0.98);
-  }
-  60% {
-    transform: translateY(0) scale(1.01);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translateY(0);
   }
 }
 
@@ -118,20 +176,40 @@ input {
   }
 }
 
+@keyframes caret-blink {
+  0%,
+  45% {
+    opacity: 1;
+  }
+  55%,
+  100% {
+    opacity: 0;
+  }
+}
+
 .reveal-1 {
-  animation: reveal-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: reveal-up 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
   animation-delay: 0.04s;
 }
 .reveal-2 {
-  animation: reveal-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: reveal-up 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
   animation-delay: 0.12s;
 }
 .reveal-3 {
-  animation: reveal-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: reveal-up 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
   animation-delay: 0.2s;
 }
 .reveal-card {
-  animation: pop-in 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: pop-in 0.36s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.caret {
+  display: inline-block;
+  width: 0.55ch;
+  margin-left: 0.12ch;
+  background: var(--color-accent);
+  color: transparent;
+  animation: caret-blink 1.05s steps(1) infinite;
 }
 
 .press {
@@ -143,7 +221,7 @@ input {
     box-shadow 0.18s ease;
 }
 .press:active:not(:disabled) {
-  transform: translateY(1px) scale(0.99);
+  transform: translateY(1px);
 }
 
 .spinner {

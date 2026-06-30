@@ -1,43 +1,188 @@
 import { render } from "solid-js/web";
-import { createSignal } from "solid-js";
+import { Show, createEffect, createSignal, onMount } from "solid-js";
 import "./app.css";
 
-import { AppBar } from "./components/AppBar";
+import { AppBar, type NavStatus } from "./components/AppBar";
 import { Hero } from "./components/Hero";
 import { ShortenerForm } from "./components/ShortenerForm";
-import { ResultCard } from "./components/ResultCard";
+import { DuplicateNotice } from "./components/DuplicateNotice";
+import { PanelHeader } from "./components/PanelHeader";
+import { RecentSection, type RecentEntry } from "./components/RecentSection";
 import { shortenUrl } from "./lib/shorten";
 import { createQrCode } from "./lib/qrcode";
+import { checkHealth } from "./lib/health";
+import {
+  readCachedHealth,
+  readCachedHistory,
+  toHistoryRecords,
+  writeCachedHealth,
+  writeCachedHistory,
+} from "./lib/session-cache";
+import {
+  bumpHistoryRecord,
+  createHistoryId,
+  findByOriginalUrl,
+  loadHistory,
+  saveHistoryRecord,
+  type HistoryRecord,
+  HISTORY_MAX_ENTRIES,
+} from "./lib/history";
 
 type RequestStatus = "idle" | "loading" | "success" | "error";
+
+function withQrCodes(records: HistoryRecord[]): RecentEntry[] {
+  return records.map((record) => ({ ...record, qrCode: "" }));
+}
+
+async function attachQrCodes(entries: RecentEntry[]) {
+  const withCodes = await Promise.all(
+    entries.map(async (entry) => ({
+      ...entry,
+      qrCode: await createQrCode(entry.shortUrl),
+    }))
+  );
+  return withCodes;
+}
 
 function App() {
   const [url, setUrl] = createSignal("");
   const [status, setStatus] = createSignal<RequestStatus>("idle");
-  const [shortUrl, setShortUrl] = createSignal("");
-  const [qrCode, setQrCode] = createSignal("");
+  const [history, setHistory] = createSignal(withQrCodes(readCachedHistory()));
   const [error, setError] = createSignal("");
-  const [copied, setCopied] = createSignal(false);
+  const [copiedId, setCopiedId] = createSignal<string | null>(null);
+  const [expandedId, setExpandedId] = createSignal<string | null>(null);
+  const [duplicateNotice, setDuplicateNotice] = createSignal<RecentEntry | null>(
+    null
+  );
+  const [apiHealth, setApiHealth] = createSignal(readCachedHealth() ?? true);
+
+  createEffect(() => {
+    writeCachedHistory(toHistoryRecords(history()));
+  });
+
+  const navStatus = (): NavStatus => {
+    if (status() === "loading") return "working";
+    if (status() === "error") return "error";
+    return apiHealth() ? "online" : "offline";
+  };
+
+  onMount(async () => {
+    const online = await checkHealth();
+    setApiHealth(online);
+    writeCachedHealth(online);
+
+    try {
+      const records = await loadHistory();
+      const entries = withQrCodes(records);
+      setHistory(entries);
+
+      attachQrCodes(entries)
+        .then((withCodes) => {
+          const qrById = new Map(withCodes.map((entry) => [entry.id, entry.qrCode]));
+          setHistory(
+            history().map((entry) =>
+              entry.qrCode === "" && qrById.has(entry.id)
+                ? { ...entry, qrCode: qrById.get(entry.id)! }
+                : entry
+            )
+          );
+        })
+        .catch(() => {
+          // Rows still work without QR previews.
+        });
+    } catch {
+      // Keep session cache snapshot if IndexedDB is unavailable.
+    }
+  });
 
   const liveMessage = () => {
+    if (duplicateNotice()) return "This URL was already shortened.";
     if (status() === "loading") return "Creating a short URL.";
-    if (status() === "success") return "Short URL created.";
+    if (status() === "success") return "Short URL ready.";
     if (status() === "error") return error();
     return "";
   };
 
-  async function handleSubmit() {
-    setStatus("loading");
-    setShortUrl("");
-    setQrCode("");
-    setError("");
-    setCopied(false);
+  async function promoteExisting(existing: RecentEntry) {
+    const record: HistoryRecord = {
+      id: existing.id,
+      originalUrl: existing.originalUrl,
+      shortUrl: existing.shortUrl,
+      shortCode: existing.shortCode,
+      createdAt: Date.now(),
+    };
 
     try {
-      const { shortUrl: nextShortUrl } = await shortenUrl(url());
-      setShortUrl(nextShortUrl);
-      setQrCode(await createQrCode(nextShortUrl));
+      await bumpHistoryRecord(record);
+    } catch {
+      // Keep working in memory if storage fails.
+    }
+
+    setCopiedId(null);
+    setExpandedId(null);
+    setDuplicateNotice(existing);
+    setHistory([
+      { ...existing, createdAt: record.createdAt, animate: false },
+      ...history().filter((entry) => entry.id !== existing.id),
+    ].slice(0, HISTORY_MAX_ENTRIES));
+    setStatus("success");
+  }
+
+  async function handleSubmit() {
+    const fullUrl = `https://${url()}`;
+
+    const inMemory = history().find((entry) => entry.originalUrl === fullUrl);
+    if (inMemory) {
+      await promoteExisting(inMemory);
+      return;
+    }
+
+    setStatus("loading");
+    setError("");
+    setCopiedId(null);
+    setDuplicateNotice(null);
+
+    try {
+      let record = await findByOriginalUrl(fullUrl);
+
+      if (record) {
+        const existing: RecentEntry = {
+          ...record,
+          qrCode: await createQrCode(record.shortUrl),
+        };
+        await promoteExisting(existing);
+        return;
+      }
+
+      const result = await shortenUrl(fullUrl);
+      const qrCode = await createQrCode(result.shortUrl);
+      record = {
+        id: createHistoryId(),
+        originalUrl: fullUrl,
+        shortUrl: result.shortUrl,
+        shortCode: result.shortCode,
+        createdAt: Date.now(),
+      };
+
+      try {
+        await saveHistoryRecord(record);
+      } catch {
+        // Still show the result if storage fails.
+      }
+
+      const entry: RecentEntry = { ...record, qrCode, animate: true };
+      setExpandedId(entry.id);
+      setHistory([entry, ...history()].slice(0, HISTORY_MAX_ENTRIES));
       setStatus("success");
+
+      const entryId = entry.id;
+      window.setTimeout(() => {
+        setHistory(
+          history().map((item) =>
+            item.id === entryId ? { ...item, animate: false } : item
+          )
+        );
+      }, entry.shortCode.length * 70 + 250);
     } catch (caughtError) {
       setStatus("error");
       setError(
@@ -48,14 +193,24 @@ function App() {
     }
   }
 
-  async function copyShortUrl() {
-    const value = shortUrl();
-    if (value === "") return;
+  function handleInput(value: string) {
+    setUrl(value);
+    setDuplicateNotice(null);
+    if (status() === "error") {
+      setStatus("idle");
+      setError("");
+    }
+  }
 
+  function toggleExpanded(id: string) {
+    setExpandedId((current) => (current === id ? null : id));
+  }
+
+  async function copyShortUrl(entry: RecentEntry) {
     try {
-      await navigator.clipboard.writeText(value);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2200);
+      await navigator.clipboard.writeText(entry.shortUrl);
+      setCopiedId(entry.id);
+      window.setTimeout(() => setCopiedId(null), 2200);
     } catch {
       setStatus("error");
       setError("Copy failed. Select the short URL and copy it manually.");
@@ -63,40 +218,57 @@ function App() {
   }
 
   return (
-    <div class="dot-grid flex min-h-svh flex-col">
-      <AppBar status={status()} />
+    <div class="grid-atmos flex min-h-svh flex-col">
+      <AppBar status={navStatus()} />
 
       <main class="flex-1">
-        <section class="mx-auto flex w-full max-w-2xl flex-col items-center gap-8 px-4 pt-12 pb-16 sm:px-6 sm:pt-20 lg:px-8">
+        <section class="mx-auto flex w-full max-w-2xl flex-col items-center gap-8 px-4 pt-6 pb-20 sm:px-6 sm:pt-10 lg:px-8">
           <Hero />
 
-          <div class="w-full rounded-card border border-border bg-surface p-5 shadow-card sm:p-7">
+          <div class="sticker w-full">
+            <PanelHeader title="Input" />
+
+            <div class="p-4 sm:p-6">
               <ShortenerForm
                 url={url()}
                 status={status()}
                 error={error()}
-                onInput={setUrl}
+                onInput={handleInput}
                 onSubmit={handleSubmit}
               />
+
+              <Show when={duplicateNotice()}>
+                {(entry) => (
+                  <div class="mt-4">
+                    <DuplicateNotice
+                      copied={copiedId() === entry().id}
+                      shortUrl={entry().shortUrl}
+                      onCopy={() => copyShortUrl(entry())}
+                    />
+                  </div>
+                )}
+              </Show>
 
               <p aria-live="polite" class="sr-only">
                 {liveMessage()}
               </p>
-
-              <ResultCard
-                shortUrl={shortUrl()}
-                qrCode={qrCode()}
-                copied={copied()}
-                onCopy={copyShortUrl}
-              />
             </div>
+          </div>
+
+          <RecentSection
+            copiedId={copiedId()}
+            entries={history()}
+            expandedId={expandedId()}
+            onCopy={copyShortUrl}
+            onToggle={toggleExpanded}
+          />
         </section>
       </main>
 
-      <footer class="border-t border-border bg-surface/60 px-4 py-5 sm:px-6 lg:px-8">
+      <footer class="border-t-2 border-border bg-surface/50 px-4 py-5 sm:px-6 lg:px-8">
         <div class="mx-auto flex w-full max-w-3xl items-center justify-center">
           <a
-            class="press inline-flex items-center gap-1.5 text-xs text-ink-muted transition hover:text-primary"
+            class="press inline-flex items-center gap-1.5 font-mono text-xs text-ink-muted transition hover:text-accent"
             href="https://github.com/zeon256/url-shortener"
             rel="noreferrer"
             target="_blank"
