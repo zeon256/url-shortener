@@ -7,7 +7,12 @@ on:
     paths:
       - "Cargo.lock"
       - "Cargo.toml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".railway/**"
       - "apps/shortener_api/**"
+      - "apps/web/**"
       - ".github/actions/setup-rust/**"
       - ".github/workflows/release-plz.yml"
       - "release-plz.toml"
