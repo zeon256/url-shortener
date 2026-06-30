@@ -183,13 +183,8 @@ GraphQL mutations (`enableServiceCdn`, `updateServiceEdgeConfig`, `purgeServiceC
 separate API surface from the `config plan/apply` graph/patch system. IaC and CDN are two
 different API fronts; the DSL has simply not been wired to the edge-config mutations yet.
 
-**Consequence:** CDN config lives outside `.railway/railway.ts` and is applied as a documented
-manual CLI step after `railway config apply`:
-
-```bash
-railway cdn enable  --service web
-railway cdn update  --service web --html-caching force --purge-on-deploy all
-```
+**Consequence:** CDN config lives outside `.railway/railway.ts` and is configured manually from
+the Railway dashboard if needed.
 
 Chosen settings:
 
@@ -201,11 +196,10 @@ Chosen settings:
 - CDN **off** on `shortener-api` — 302 redirects and JSON API responses aren't cacheable without
   explicit `max-age`; leaving it off avoids accidental caching of redirect targets.
 
-**Known risk to verify during #15:** whether `railway config apply` preserves or wipes
-unmanaged edge settings when it patches a service. The importer "omits platform defaults," which
-*suggests* IaC leaves unset fields alone — but this is unverified. If `config apply` ever recreates
-or resets the `web` service, the `railway cdn enable/update` step must be re-run. #15 should verify
-this behavior and document the handoff (a small post-apply script if needed).
+**Known risk:** whether `railway config apply` preserves or wipes unmanaged edge settings when it
+patches a service. The importer "omits platform defaults," which *suggests* IaC leaves unset fields
+alone, but CDN should be re-checked in the Railway dashboard after service recreation or domain
+changes.
 
 **DSL stability:** the IaC DSL is explicitly experimental ("expect rough edges while the DSL
 settles"). Pin the `railway` SDK version and re-check on each release — `config pull` may start
@@ -228,6 +222,7 @@ regenerable scaffold is decided during #15 implementation.
   to the current pinned fallback. CI sets this from the release version it wants deployed.
 - Frontend/backend custom domains are supplied to `.railway/railway.ts` with
   `SHORTENER_WEB_DOMAIN` and `SHORTENER_API_DOMAIN`, defaulting to the production domains.
-- CI uses `railway config plan --detailed-exit-code` to detect drift; deploys use
-  `railway config apply` (interactive, or `--yes --confirm-destructive` in CI).
+- CI uses `railway config plan` to preview deploy changes; release deploys use
+  `railway config apply --yes` without `--confirm-destructive`, so destructive plans fail instead
+  of deleting resources automatically.
 - Kubernetes manifests and Cloudflare Pages config are intentionally **not** part of the repo.
