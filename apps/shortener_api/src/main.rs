@@ -18,11 +18,12 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let ProgramArgs {
-        server: ServerArgs {
-            address,
-            port,
-            host,
-        },
+        server:
+            ServerArgs {
+                address,
+                port,
+                cors_allowed_origins,
+            },
         postgres,
     } = cli::from_env();
 
@@ -30,7 +31,7 @@ async fn main() -> anyhow::Result<()> {
     sqlx::migrate!("./migrations").run(&pool).await?;
     info!("connected to Postgres; migrations applied");
 
-    let app = routes::router(pool, host);
+    let app = routes::router(pool, cors_allowed_origins);
 
     let addr = format!("{address}:{port}");
     let listener = TcpListener::bind(&addr).await?;

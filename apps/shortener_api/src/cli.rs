@@ -11,7 +11,7 @@ pub struct ProgramArgs {
 pub struct ServerArgs {
     pub port: u16,
     pub address: &'static str,
-    pub host: &'static str,
+    pub cors_allowed_origins: &'static [&'static str],
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -45,9 +45,9 @@ struct RawProgramArgs {
     )]
     address: &'static str,
 
-    /// public host used when generating short URLs
-    #[argh(option, env = "HOST", from_str_fn(parse_public_host))]
-    host: &'static str,
+    /// comma-separated list of CORS-allowed origins (<scheme://host[:port]>)
+    #[argh(option, env = "CORS_ALLOWED_ORIGINS", from_str_fn(parse_cors_origins))]
+    cors_allowed_origins: &'static [&'static str],
 
     /// postgres host
     #[argh(option, env = "POSTGRES_HOST", from_str_fn(parse_static_str))]
@@ -88,7 +88,7 @@ impl From<RawProgramArgs> for ProgramArgs {
             server: ServerArgs {
                 port: args.port,
                 address: args.address,
-                host: args.host,
+                cors_allowed_origins: args.cors_allowed_origins,
             },
             postgres: PostgresArgs {
                 host: args.postgres_host,
@@ -120,62 +120,93 @@ fn parse_static_str(s: &str) -> Result<&'static str, String> {
     Ok(s)
 }
 
-fn parse_public_host(s: &str) -> Result<&'static str, String> {
-    if s.is_empty() {
-        return Err("HOST must not be empty".to_string());
+/// Parse a comma-separated list of CORS-allowed origins. Each token must be a
+/// full origin (`scheme://host[:port]`) with an `http`/`https` scheme and no
+/// path, query, fragment, or userinfo — i.e. exactly what a browser sends in the
+/// `Origin` header. The original trimmed token is preserved (not re-serialized
+/// via `Url`, which would append a trailing `/`) so it matches the header byte
+/// for byte.
+fn parse_cors_origins(s: &str) -> Result<&'static [&'static str], String> {
+    let mut origins = vec![];
+
+    for token in s.split(',') {
+        let origin = token.trim();
+        if origin.is_empty() {
+            return Err("CORS_ALLOWED_ORIGINS must not contain empty entries".to_string());
+        }
+
+        let url = Url::parse(origin)
+            .map_err(|_| format!("{origin:?} is not a valid origin (scheme://host[:port])"))?;
+
+        // `Url::parse` gives both `https://x` and `https://x/` a `/` path, but the
+        // browser `Origin` header never carries a trailing slash — reject it so the
+        // stored token matches the header exactly.
+        let is_origin = matches!(url.scheme(), "http" | "https")
+            && url.host_str().is_some()
+            && url.username().is_empty()
+            && url.password().is_none()
+            && url.path() == "/"
+            && !origin.ends_with('/')
+            && url.query().is_none()
+            && url.fragment().is_none();
+
+        if !is_origin {
+            return Err(format!(
+                "{origin:?} must be an origin like https://app.example.com (scheme://host[:port], no path)"
+            ));
+        }
+
+        origins.push(parse_static_str(origin)?);
     }
 
-    if s.trim() != s {
-        return Err("HOST must not contain leading or trailing whitespace".to_string());
+    if origins.is_empty() {
+        return Err("CORS_ALLOWED_ORIGINS must list at least one origin".to_string());
     }
 
-    if s.contains('/') {
-        return Err("HOST must not include a scheme or path".to_string());
-    }
-
-    let url = Url::parse(&format!("https://{s}"))
-        .map_err(|_| "HOST must be a host name with an optional port".to_string())?;
-
-    let host_only = url.host_str().is_some()
-        && url.username().is_empty()
-        && url.password().is_none()
-        && url.path() == "/"
-        && url.query().is_none()
-        && url.fragment().is_none();
-
-    if !host_only {
-        return Err(
-            "HOST must be a host name with an optional port, without scheme or path".to_string(),
-        );
-    }
-
-    parse_static_str(s)
+    Ok(Box::leak(origins.into_boxed_slice()))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::parse_public_host;
+    use super::parse_cors_origins;
 
     #[test]
-    fn parse_public_host_accepts_host_with_optional_port() {
-        for host in ["example.com", "api.example.com:443", "localhost:4002"] {
-            assert_eq!(parse_public_host(host).expect("host should parse"), host);
-        }
+    fn parse_cors_origins_accepts_single_and_multiple_origins() {
+        assert_eq!(
+            parse_cors_origins("https://example.com").expect("origin should parse"),
+            ["https://example.com"]
+        );
+        assert_eq!(
+            parse_cors_origins("https://a.example.com,http://localhost:8080")
+                .expect("origins should parse"),
+            ["https://a.example.com", "http://localhost:8080"]
+        );
     }
 
     #[test]
-    fn parse_public_host_rejects_url_or_path_values() {
-        for host in [
+    fn parse_cors_origins_trims_surrounding_whitespace() {
+        assert_eq!(
+            parse_cors_origins(" https://a.com , http://localhost:8080 ")
+                .expect("origins should parse"),
+            ["https://a.com", "http://localhost:8080"]
+        );
+    }
+
+    #[test]
+    fn parse_cors_origins_rejects_invalid_entries() {
+        for value in [
             "",
-            "https://example.com",
-            "example.com/path",
-            "example.com/",
-            "example.com?debug=true",
+            "example.com",                    // bare host, no scheme
+            "https://example.com,",           // trailing empty entry
+            "https://example.com/x",          // has a path
+            "https://example.com/",           // trailing slash won't match Origin header
+            "https://example.com?debug=true", // has a query
+            "ftp://example.com",              // unsupported scheme
             "user@example.com",
         ] {
             assert!(
-                parse_public_host(host).is_err(),
-                "{host:?} should be rejected"
+                parse_cors_origins(value).is_err(),
+                "{value:?} should be rejected"
             );
         }
     }
