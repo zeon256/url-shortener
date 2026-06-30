@@ -1,25 +1,62 @@
 # url-shortener
 
-## Running end to end with Docker 
+## Running end-to-end (Docker Compose)
 
 > [!TIP]
-> Not to be confused with development. 
+> If you want to run the app end-to-end without installing Rust, Node.js, or pnpm.
+> This is **not** the local development workflow — see [Building from source](#building-from-source) below.
 
-If you just want to run the system end to end without installing any of the mentioned toolchains, use the `app` Compose profile from the repo root:
+### Compose profiles
+
+[`compose.yml`](compose.yml) splits services into two groups:
+
+| Service | Profile | Port (default) | Purpose |
+| --- | --- | --- | --- |
+| `postgres` | *(none — always starts)* | `5432` | Database |
+| `api` | `app` | `8000` | Rust backend |
+| `web` | `app` | `8080` | SolidJS frontend (Caddy) |
+
+- **`docker compose up`** — starts **Postgres only**. Use this when running the backend and frontend on your host during development.
+- **`docker compose --profile app up`** — starts **Postgres + API + web**, i.e. the full stack end-to-end.
+
+Optional env overrides live in [`.env.example`](.env.example); copy to `.env` if you need different ports or credentials:
+
+```bash
+cp .env.example .env
+```
+
+### Run the full stack
+
+From the repo root:
 
 ```bash
 docker compose --profile app up --build
 ```
 
-This will build both frontend and backend using multistage builds as well as spawn the database. You can then access the frontend at `http://localhost:8080` and the backend at `http://localhost:8000`.
+The first run builds both images (multistage Dockerfiles) and waits for Postgres to become healthy before starting the API.
 
-To run the full stack in the background, add `-d`:
+When the logs settle, open:
+
+- **Frontend:** [http://localhost:8080](http://localhost:8080) — shorten a URL in the UI
+- **Backend:** [http://localhost:8000/healthz](http://localhost:8000/healthz) — should return HTTP 200
+
+The frontend is built with `VITE_BACKEND_URL=http://localhost:8000` (see `.env.example`), so the browser talks to the API on your host loopback.
+
+Run detached (background):
 
 ```bash
 docker compose --profile app up --build -d
 ```
 
-### Common Pitfalls and debugging for Docker
+Follow logs: `docker compose --profile app logs -f`
+
+Stop and remove containers (keeps the Postgres volume):
+
+```bash
+docker compose --profile app down
+```
+
+### Common pitfalls and debugging (Docker)
 
 - On some OS you can spawn containers with same ports and have no errors. Check that you do not have any existing Docker containers running on the same ports. You can check this with `docker ps` and stop any existing containers with `docker stop <container_id>`. Likewise this applies to locally installed tool that might interfere with the ports.
 
@@ -118,7 +155,7 @@ You can inspect the backend logs for PostgreSQL connection errors.
 
 #### Running PostgreSQL with Docker Compose
 
-This repo includes a Docker Compose file for local PostgreSQL. By default, only PostgreSQL starts because the app services are behind the `app` profile.
+This repo includes a Docker Compose file for local PostgreSQL. By default, only PostgreSQL starts because the app services are behind the `app` profile (see [Running end-to-end](#running-end-to-end-docker-compose)).
 
 From the repo root, run:
 
@@ -126,8 +163,116 @@ From the repo root, run:
 docker compose up -d
 ```
 
-This starts a PostgreSQL instance on port `5432` using the credentials shown in the setup command above. To customize the ports or credentials, copy the Compose env example first:
+This starts a PostgreSQL instance on port `5432` using the credentials shown in the setup command above. To run the full stack instead, use `docker compose --profile app up --build`.
+
+To customize ports or credentials, copy the Compose env example first:
 
 ```bash
 cp .env.example .env
 ```
+
+## Deployment
+
+Production runs on **[Railway](https://railway.com)**, both the backend and frontend services live
+in a single Railway project. Railway is *not* required for local evaluation; everything above
+(Docker Compose / `cargo run` / `pnpm dev`) is for local development. Rationale and the
+IaC-vs-CDN ownership discussion live in [`docs/decision.md`](docs/decision.md) (D3).
+
+### Project topology (Infrastructure as Code)
+
+Project topology is defined declaratively in [`.railway/railway.ts`](.railway/railway.ts) using
+Railway's IaC DSL:
+
+- `postgres("postgres")` — managed Postgres
+- `shortener-api` — the Rust backend, deployed from the pinned GHCR image tag, exposed at
+  `https://s.inve.rs`, wired to Postgres, and configured to allow the frontend origin
+- `web` — the SolidJS frontend, built from `apps/web` (`pnpm install --frozen-lockfile && pnpm build`)
+  and served by **Caddy** from `dist/` via [`apps/web/Caddyfile`](apps/web/Caddyfile), exposed at
+  `https://shorter.inve.rs`
+
+Production URLs are configured with custom Railway domains: `shorter.inve.rs` for the frontend and
+`s.inve.rs` for the backend. The backend's `HOST` value is the bare host (`s.inve.rs`), matching
+the API's self-reference guard parser. CI can override these defaults with `SHORTENER_WEB_DOMAIN`
+and `SHORTENER_API_DOMAIN` when applying the Railway config.
+
+### Apply changes
+
+From the repo root, after installing the Railway CLI:
+
+```bash
+railway login
+railway link                      # select project + environment once
+
+railway config plan               # preview the diff vs the live environment
+railway config apply              # apply after confirmation
+# or, in CI:
+railway config apply --yes --confirm-destructive
+```
+
+For pre-merge testing from a Railway deployment branch, point the GitHub source at that branch
+explicitly:
+
+```bash
+RAILWAY_GITHUB_BRANCH=chore/deploy-railway railway config plan
+RAILWAY_GITHUB_BRANCH=chore/deploy-railway railway config apply
+```
+
+Leave `RAILWAY_GITHUB_BRANCH` unset for normal production deploys; Railway then builds from the
+repository default branch.
+
+The backend image tag defaults to `0.1.1`. To deploy a specific published GHCR image tag, pass
+`SHORTENER_API_TAG`:
+
+```bash
+SHORTENER_API_TAG=0.1.1 railway config plan
+SHORTENER_API_TAG=0.1.1 railway config apply
+```
+
+CI should set `SHORTENER_API_TAG` from the release version it wants Railway to deploy.
+The `release-plz.yml` workflow does this automatically after the release image is pushed to GHCR
+and the Trivy scan passes, then runs `railway config apply --yes` against the `production`
+environment.
+
+The custom domains default to `shorter.inve.rs` for the frontend and `s.inve.rs` for the backend.
+To deploy the same topology with different domains, pass `SHORTENER_WEB_DOMAIN` and
+`SHORTENER_API_DOMAIN`:
+
+```bash
+SHORTENER_WEB_DOMAIN=preview.example.com \
+SHORTENER_API_DOMAIN=api-preview.example.com \
+railway config plan
+```
+
+The API domain must be a bare host because it is also used as the backend `HOST` value.
+
+`railway config plan --detailed-exit-code` exits `2` on drift, suitable for gating CI on
+unapplied changes to `.railway/railway.ts`.
+
+### CDN (frontend only)
+
+The Railway CDN sits in front of the `web` service. CDN settings are **not** part of
+`.railway/railway.ts` (see D3's "IaC–CDN ownership gap" caveat), so they're applied via CLI once
+(`/15`):
+
+```bash
+railway cdn enable  --service web
+railway cdn update  --service web --html-caching force --purge-on-deploy all
+```
+
+- **Force** HTML caching — Caddy serves `index.html` without cache headers; the CDN caches it via
+  its Default TTL.
+- **Purge-on-deploy = all** — every deploy flushes cached assets too, so a fresh build can't
+  reference outdated hashed assets.
+- CDN is **off** on `shortener-api` — 302 redirects and JSON API responses aren't cacheable
+  without explicit `max-age`.
+
+Re-run the CLI step above only if a future `railway config apply` recreates the `web` service.
+
+### Local vs production
+
+| | Local | Production |
+| --- | --- | --- |
+| Postgres | Docker Compose container | Railway-managed Postgres |
+| Backend | `cargo run` (or `docker compose --profile app`) | Railway `shortener-api` service |
+| Frontend | `pnpm dev` (or `docker compose --profile app`) | Railway `web` service (Caddy + CDN) |
+| TLS | none | Railway edge (Caddyfile uses `auto_https off`) |

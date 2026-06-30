@@ -108,3 +108,126 @@ If stronger collision resistance is ever wanted without `convert_to`, the altern
   → `https://example.com/a` — echoing it back is a *confirmation of the canonical URL we stored
   and will redirect to*, not a redundant repeat of the input. The value is highest exactly when
   it differs from what was submitted.
+
+## D3 — Railway-deploy-everything (Infrastructure as Code + CDN)
+
+**Status:** Accepted — tracked in #15.
+**Date:** 2026-06-30
+**Context:** #1 originally specified Kubernetes for the backend and Cloudflare Pages for the
+frontend. We're consolidating both workloads onto a single Railway project, defined via
+Railway's Infrastructure as Code (`.railway/railway.ts`), with Railway's built-in CDN in front
+of the frontend service. This replaces the Kubernetes + Cloudflare Pages plan (#48 is closed in
+favor of #15).
+
+### Why Railway instead of Kubernetes
+
+- Initially I wanted to deploy to Kubernetes because I already have an existing cluster running on my RPI5, however
+the config of that is a private repo and makes it messy + the overhead of setting up again is not pragmatic
+- Managed Postgres, builds, and deploys with no manifests/Ingress/controller boilerplate — a
+  small project doesn't justify a k8s control plane.
+- Faster local→prod loop: the same Dockerfile that builds locally ships to Railway; no separate
+  image-build/push/manifest pipeline to maintain.
+- One platform, one deploy surface, one auth model. Keeps the codebase small enough to defend
+  in the follow-up interview.
+- Railway is not required for local evaluation — Docker Compose / `cargo run` / `pnpm dev` remain
+  the local story, and the repo's README documents that split.
+
+### Why drop Cloudflare Pages for the frontend
+
+Usually for all my projects I deploy on Cloudflare Pages because it is a great tool + its free but
+decided to go against it this time for a simpler deployment story. The frontend is a single-page app (SPA) with hashed assets, so the CDN is the only part of Cloudflare Pages we actually needed.
+
+Railway's CDN covers what we'd have used from Cloudflare Pages:
+
+- **Edge caching by content-type**, not file extension — Vite's hashed `dist/assets/*.js|.css`
+  outputs match Railway's static-asset content-type list and are cached at edge automatically, even
+  with no `Cache-Control` from Caddy.
+- **Global POPs** route each visitor to the nearest edge location; cache hits never reach the origin.
+- **Edge compression** (Brotli/gzip) is handled at the edge, so Caddy doesn't need `encode gzip`.
+- **Purge-on-deploy** invalidates stale content after each successful deploy, so a fresh frontend
+  build can't reference outdated hashed assets.
+- Keeping the frontend on the same platform as the backend means one IaC file, one deploy surface,
+  and one auth/CI path — strictly simpler than splitting frontend to a separate platform.
+
+The frontend is served by **Caddy** (`apps/web/Caddyfile`) running on Railway, with
+`try_files {path} /index.html` for SPA routing; Railway terminates TLS at the edge, so the
+Caddyfile uses `auto_https off`.
+
+### Why Infrastructure as Code (`.railway/railway.ts`)
+
+`.railway/railway.ts` is the single source of truth for project topology: services, Postgres
+database, environment variables, custom domains (defaulting to `shorter.inve.rs` for the frontend
+and `s.inve.rs` for the backend, overridable via `SHORTENER_WEB_DOMAIN` and
+`SHORTENER_API_DOMAIN`), replicas, and canvas groups. The Railway CLI diffs the file against the
+live environment:
+
+- `railway config plan` — preview the diff (additive review, secrets redacted in output)
+- `railway config apply` — apply after confirmation; rejects a stale plan if the environment
+  changed in between, so concurrent edits can't silently overwrite each other
+- `railway config plan --detailed-exit-code` — opt-in exit code 2 on drift, for gating CI
+
+The `.railway/railway.ts` file is the working alternative to `railway.json`/`railway.toml`
+(Config as Code). A service cannot be managed by both — IaC owns the whole project here.
+
+### IaC–CDN ownership gap (important caveat)
+
+`.railway/railway.ts` **does not (yet) own CDN/edge settings.** Verified against `railway@3.4.1`
+(latest at time of writing): `ServiceConfigInput`, `ServiceNetworking`, and `DeployConfig`
+expose **no** edge/CDN fields (no `cdn`, `edgeConfig`, `htmlCaching`, `defaultTtl`,
+`purgeOnDeploy`, or `staleWhileRevalidate`). A repo-wide grep of the SDK bundle for those terms
+returns zero matches. The `Edge` type that *does* exist is the internal resource-reference graph
+edge, unrelated to Railway's edge/CDN product.
+
+Corroborating signal: the `railway cdn` CLI (PR railwayapp/cli#982) implements CDN via dedicated
+GraphQL mutations (`enableServiceCdn`, `updateServiceEdgeConfig`, `purgeServiceCache`) — a
+separate API surface from the `config plan/apply` graph/patch system. IaC and CDN are two
+different API fronts; the DSL has simply not been wired to the edge-config mutations yet.
+
+**Consequence:** CDN config lives outside `.railway/railway.ts` and is applied as a documented
+manual CLI step after `railway config apply`:
+
+```bash
+railway cdn enable  --service web
+railway cdn update  --service web --html-caching force --purge-on-deploy all
+```
+
+Chosen settings:
+
+- HTML caching **Force** — Caddy serves `index.html` with no cache header; Force lets the CDN
+  cache it via the Default TTL. (Alternative was Auto + emitting `Cache-Control` for HTML from
+  Caddy; Force was chosen for a simpler Caddyfile.)
+- Purge-on-deploy **all** — every deploy flushes assets too, accepting the extra origin fetches
+  in exchange for a simpler mental model. Safer when asset hashes ever change.
+- CDN **off** on `shortener-api` — 302 redirects and JSON API responses aren't cacheable without
+  explicit `max-age`; leaving it off avoids accidental caching of redirect targets.
+
+**Known risk to verify during #15:** whether `railway config apply` preserves or wipes
+unmanaged edge settings when it patches a service. The importer "omits platform defaults," which
+*suggests* IaC leaves unset fields alone — but this is unverified. If `config apply` ever recreates
+or resets the `web` service, the `railway cdn enable/update` step must be re-run. #15 should verify
+this behavior and document the handoff (a small post-apply script if needed).
+
+**DSL stability:** the IaC DSL is explicitly experimental ("expect rough edges while the DSL
+settles"). Pin the `railway` SDK version and re-check on each release — `config pull` may start
+emitting CDN fields in a future minor, at which point the manual CLI step can move into
+`.railway/railway.ts`.
+
+### Generated support files
+
+`railway config init` / `railway config pull` also create `.railway/README.md` and
+`.agents/skills/railway-config/SKILL.md`. Whether to commit them or gitignore them as
+regenerable scaffold is decided during #15 implementation.
+
+### Consequences
+
+- Backend production target: Railway (Dockerfile + `/health`). Replaces Kubernetes.
+- Frontend production target: Railway (Caddy + Railway CDN). Replaces Cloudflare Pages.
+- Production Postgres is Railway's managed Postgres (`postgres("postgres")` in `.railway/railway.ts`),
+  not the Docker Compose container used locally.
+- Backend image selection is supplied to `.railway/railway.ts` with `SHORTENER_API_TAG`, defaulting
+  to the current pinned fallback. CI sets this from the release version it wants deployed.
+- Frontend/backend custom domains are supplied to `.railway/railway.ts` with
+  `SHORTENER_WEB_DOMAIN` and `SHORTENER_API_DOMAIN`, defaulting to the production domains.
+- CI uses `railway config plan --detailed-exit-code` to detect drift; deploys use
+  `railway config apply` (interactive, or `--yes --confirm-destructive` in CI).
+- Kubernetes manifests and Cloudflare Pages config are intentionally **not** part of the repo.
