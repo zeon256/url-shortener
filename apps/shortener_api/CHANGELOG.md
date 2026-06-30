@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2](https://github.com/zeon256/url-shortener/compare/v0.1.1...v0.1.2) - 2026-06-30
+
+### Added
+
+- *(api)* url validation
+
+### Fixed
+
+- *(api)* replace HOST with CORS_ALLOWED_ORIGINS allowlist
+
 ## [0.1.1](https://github.com/zeon256/url-shortener/compare/v0.1.0...v0.1.1) - 2026-06-29
 
 ### Fixed
