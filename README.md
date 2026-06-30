@@ -1,7 +1,7 @@
 # url-shortener
 
 <p align="center">
-  <img src="./images/logo.png" alt="logo" width="300">
+  <img src="./images/logo.webp" alt="logo" width="300">
 </p>
 
 ## Table of Contents
@@ -15,8 +15,7 @@
 ## Running end-to-end (Docker Compose)
 
 > [!TIP]
-> If you want to run the app end-to-end without installing Rust, Node.js, or pnpm.
-> This is **not** the local development workflow — see [Building from source](#building-from-source) below.
+> If you want to run the app end-to-end without installing Rust, Node.js, or pnpm use this!
 
 ### Compose profiles
 
