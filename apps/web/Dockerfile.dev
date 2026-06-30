@@ -7,14 +7,16 @@ WORKDIR /app
 
 RUN corepack enable
 
-COPY apps/web/package.json apps/web/pnpm-lock.yaml apps/web/pnpm-workspace.yaml ./
-RUN pnpm install --frozen-lockfile
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/web/package.json ./apps/web/package.json
+RUN pnpm install --frozen-lockfile --filter web...
 
-COPY apps/web/index.html apps/web/tsconfig.json apps/web/vite.config.ts ./
-COPY apps/web/src ./src
+COPY apps/web/index.html apps/web/tsconfig.json apps/web/vite.config.ts ./apps/web/
+COPY apps/web/src ./apps/web/src
 
 ARG VITE_BACKEND_URL
 ENV VITE_BACKEND_URL=$VITE_BACKEND_URL
+WORKDIR /app/apps/web
 RUN pnpm run build
 
 
@@ -25,7 +27,7 @@ RUN microdnf install -y nginx shadow-utils && \
     microdnf clean all
 
 COPY apps/web/nginx.conf /etc/nginx/nginx.conf
-COPY --from=builder /app/dist /usr/share/nginx/html
+COPY --from=builder /app/apps/web/dist /usr/share/nginx/html
 
 RUN mkdir -p /var/log/nginx && \
     chown -R appuser:0 /usr/share/nginx/html /var/log/nginx && \
