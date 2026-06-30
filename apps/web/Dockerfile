@@ -20,21 +20,13 @@ WORKDIR /app/apps/web
 RUN pnpm run build
 
 
-FROM redhat/ubi10-minimal AS runner
+FROM caddy:2-alpine AS runner
 
-RUN microdnf install -y nginx shadow-utils && \
-    useradd --system --uid 1001 --gid 0 appuser && \
-    microdnf clean all
+WORKDIR /srv
 
-COPY apps/web/nginx.conf /etc/nginx/nginx.conf
-COPY --from=builder /app/apps/web/dist /usr/share/nginx/html
+COPY apps/web/Caddyfile /etc/caddy/Caddyfile
+COPY --from=builder /app/apps/web/dist ./dist
 
-RUN mkdir -p /var/log/nginx && \
-    chown -R appuser:0 /usr/share/nginx/html /var/log/nginx && \
-    chmod -R g=u /usr/share/nginx/html /var/log/nginx
+EXPOSE 3000
 
-USER appuser
-
-EXPOSE 8080
-
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]

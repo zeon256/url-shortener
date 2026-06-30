@@ -227,3 +227,59 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: "1"
+
+  railway-deploy:
+    name: Deploy to Railway
+    needs: [release-gate, docker-image, trivy-scan]
+    if: needs.release-gate.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+    env:
+      RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+      RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
+      RAILWAY_ENVIRONMENT: ${{ vars.RAILWAY_ENVIRONMENT || 'production' }}
+      SHORTENER_API_TAG: ${{ needs.release-gate.outputs.version }}
+      SHORTENER_API_DOMAIN: ${{ vars.SHORTENER_API_DOMAIN || 's.inve.rs' }}
+      SHORTENER_WEB_DOMAIN: ${{ vars.SHORTENER_WEB_DOMAIN || 'shorter.inve.rs' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          persist-credentials: false
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@d15e628ca66d93ee5f352c71671a7bc6a97af5c9 # v6.0.8
+        with:
+          package_json_file: package.json
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Railway CLI
+        run: npm install --global @railway/cli@5.23.2
+
+      - name: Check Railway configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${RAILWAY_API_TOKEN:?RAILWAY_API_TOKEN production secret is required}"
+          : "${RAILWAY_PROJECT_ID:?RAILWAY_PROJECT_ID production variable is required}"
+          : "${RAILWAY_ENVIRONMENT:?RAILWAY_ENVIRONMENT production variable is required}"
+
+      - name: Link Railway project
+        run: railway link --project "$RAILWAY_PROJECT_ID" --environment "$RAILWAY_ENVIRONMENT"
+
+      - name: Plan Railway deployment
+        run: railway config plan
+
+      - name: Apply Railway deployment
+        run: railway config apply --yes
