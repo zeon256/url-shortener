@@ -54,7 +54,7 @@ docker compose up -d
 Then run these commands from 2 different terminals.
 
 ```bash
-cargo run -- --host localhost:4002 --port 4002 --postgres-host localhost --postgres-port 5432 --postgres-user urlshort --postgres-password urlshort --postgres-db urlshort
+cargo run -- --disallowed-hosts localhost:4002 --port 4002 --postgres-host localhost --postgres-port 5432 --postgres-user urlshort --postgres-password urlshort --postgres-db urlshort
 ```
 
 ```bash

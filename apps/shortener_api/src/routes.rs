@@ -71,7 +71,7 @@ async fn shorten(
     State(state): State<AppState>,
     Json(ShortenBody { url }): Json<ShortenBody>,
 ) -> Result<impl IntoResponse, Error> {
-    validate_url(&url, state.server_args.host)?;
+    validate_url(&url, state.server_args.disallowed_hosts)?;
 
     let url = normalize(url);
 
@@ -90,31 +90,34 @@ async fn shorten(
     Ok((status, Json(response)))
 }
 
-fn validate_url(url: &Url, public_host: &'static str) -> Result<(), Error> {
+fn validate_url(url: &Url, disallowed_hosts: &'static [&'static str]) -> Result<(), Error> {
     if !matches!(url.scheme(), "http" | "https") {
         return Err(Error::UnsupportedUrlScheme);
     }
 
-    if is_public_host(url, public_host) {
+    if disallowed_hosts
+        .iter()
+        .any(|disallowed_host| is_disallowed_host(url, disallowed_host))
+    {
         return Err(Error::SelfReferentialUrl);
     }
 
     Ok(())
 }
 
-fn is_public_host(url: &Url, public_host: &'static str) -> bool {
-    let public_url = Url::parse(&format!("https://{public_host}"))
-        .expect("public host should be validated by CLI");
-    let Some(public_host) = public_url.host_str() else {
+fn is_disallowed_host(url: &Url, disallowed_host: &'static str) -> bool {
+    let disallowed_url = Url::parse(&format!("https://{disallowed_host}"))
+        .expect("disallowed host should be validated by CLI");
+    let Some(disallowed_host) = disallowed_url.host_str() else {
         return false;
     };
 
-    if url.host_str() != Some(public_host) {
+    if url.host_str() != Some(disallowed_host) {
         return false;
     }
 
-    match public_url.port() {
-        Some(public_port) => url.port_or_known_default() == Some(public_port),
+    match disallowed_url.port() {
+        Some(disallowed_port) => url.port_or_known_default() == Some(disallowed_port),
         None => true,
     }
 }
@@ -184,7 +187,7 @@ mod tests {
         ] {
             assert!(
                 matches!(
-                    validate_url(&parsed(input), "short.inve.rs"),
+                    validate_url(&parsed(input), &["owned.example.test"]),
                     Err(Error::UnsupportedUrlScheme)
                 ),
                 "{input:?} should be rejected"
@@ -193,33 +196,53 @@ mod tests {
     }
 
     #[test]
-    fn rejects_self_referential_public_host() {
+    fn rejects_configured_disallowed_hosts() {
         for input in [
-            "https://short.inve.rs/path",
-            "http://short.inve.rs/path",
-            "https://short.inve.rs:444/path",
+            "https://api.example.test/path",
+            "http://api.example.test/path",
+            "https://api.example.test:444/path",
+            "https://app.example.test/path",
         ] {
             assert!(
                 matches!(
-                    validate_url(&parsed(input), "short.inve.rs"),
+                    validate_url(&parsed(input), &["api.example.test", "app.example.test"]),
                     Err(Error::SelfReferentialUrl)
                 ),
                 "{input:?} should be rejected"
             );
         }
 
-        assert!(validate_url(&parsed("https://attackershort.inve.rs"), "short.inve.rs").is_ok());
-        assert!(validate_url(&parsed("https://short.inve.rs.evil.com"), "short.inve.rs").is_ok());
+        assert!(
+            validate_url(
+                &parsed("https://attacker-api.example.test"),
+                &["api.example.test", "app.example.test"]
+            )
+            .is_ok()
+        );
+        assert!(
+            validate_url(
+                &parsed("https://app.example.test.evil.com"),
+                &["api.example.test", "app.example.test"]
+            )
+            .is_ok()
+        );
+        assert!(
+            validate_url(
+                &parsed("https://example.org/path"),
+                &["api.example.test", "app.example.test"]
+            )
+            .is_ok()
+        );
     }
 
     #[test]
-    fn respects_configured_public_port_for_self_reference() {
+    fn respects_configured_disallowed_host_port() {
         assert!(matches!(
-            validate_url(&parsed("http://localhost:4002/path"), "localhost:4002"),
+            validate_url(&parsed("http://localhost:4002/path"), &["localhost:4002"]),
             Err(Error::SelfReferentialUrl)
         ));
-        assert!(validate_url(&parsed("http://localhost:3000/path"), "localhost:4002").is_ok());
-        assert!(validate_url(&parsed("http://localhost/path"), "localhost:4002").is_ok());
+        assert!(validate_url(&parsed("http://localhost:3000/path"), &["localhost:4002"]).is_ok());
+        assert!(validate_url(&parsed("http://localhost/path"), &["localhost:4002"]).is_ok());
     }
 
     #[test]

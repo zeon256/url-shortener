@@ -15,7 +15,7 @@ Default production domains:
 - Frontend: `https://shorter.inve.rs`
 - Backend: `https://s.inve.rs`
 
-The backend `HOST` value is the bare API host (`s.inve.rs`), not a URL. The API rejects schemes and paths in `HOST` because it uses this value for self-reference checks.
+The backend `DISALLOWED_HOSTS` value is a comma-separated list of owned bare hosts (`s.inve.rs,shorter.inve.rs`), not URLs. The API rejects schemes and paths in these entries because it uses them to reject owned-domain shortens.
 
 ## Railway Inputs
 
@@ -24,8 +24,8 @@ The backend `HOST` value is the bare API host (`s.inve.rs`), not a URL. The API 
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `SHORTENER_API_TAG` | current fallback in `.railway/railway.ts` | GHCR image tag for `shortener-api` |
-| `SHORTENER_API_DOMAIN` | `s.inve.rs` | API custom domain and backend `HOST` value |
-| `SHORTENER_WEB_DOMAIN` | `shorter.inve.rs` | frontend custom domain and backend CORS origin |
+| `SHORTENER_API_DOMAIN` | `s.inve.rs` | API custom domain and one backend `DISALLOWED_HOSTS` entry |
+| `SHORTENER_WEB_DOMAIN` | `shorter.inve.rs` | frontend custom domain, backend CORS origin, and one backend `DISALLOWED_HOSTS` entry |
 | `RAILWAY_GITHUB_BRANCH` | unset | optional pre-merge branch override for the web GitHub source |
 
 Leave `RAILWAY_GITHUB_BRANCH` unset for normal production deploys so Railway builds the frontend from the repository default branch.

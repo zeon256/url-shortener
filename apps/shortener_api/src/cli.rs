@@ -12,9 +12,9 @@ pub struct ServerArgs {
     pub port: u16,
     pub address: &'static str,
     pub cors_allowed_origins: &'static [&'static str],
-    /// Public host of this shortener (`host[:port]`), used to reject shortening
-    /// URLs that point back at the service. Distinct from `cors_allowed_origins`.
-    pub host: &'static str,
+    /// Owned hosts (`host[:port]`) that cannot be shortened. Distinct from
+    /// `cors_allowed_origins`, which controls browser access to the API.
+    pub disallowed_hosts: &'static [&'static str],
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -52,9 +52,9 @@ struct RawProgramArgs {
     #[argh(option, env = "CORS_ALLOWED_ORIGINS", from_str_fn(parse_cors_origins))]
     cors_allowed_origins: &'static [&'static str],
 
-    /// public host of this shortener, used to reject self-referential URLs
-    #[argh(option, env = "HOST", from_str_fn(parse_public_host))]
-    host: &'static str,
+    /// comma-separated owned hosts that cannot be shortened (`host[:port]`)
+    #[argh(option, env = "DISALLOWED_HOSTS", from_str_fn(parse_disallowed_hosts))]
+    disallowed_hosts: &'static [&'static str],
 
     /// postgres host
     #[argh(option, env = "POSTGRES_HOST", from_str_fn(parse_static_str))]
@@ -96,7 +96,7 @@ impl From<RawProgramArgs> for ProgramArgs {
                 port: args.port,
                 address: args.address,
                 cors_allowed_origins: args.cors_allowed_origins,
-                host: args.host,
+                disallowed_hosts: args.disallowed_hosts,
             },
             postgres: PostgresArgs {
                 host: args.postgres_host,
@@ -174,23 +174,36 @@ fn parse_cors_origins(s: &str) -> Result<&'static [&'static str], String> {
     Ok(Box::leak(origins.into_boxed_slice()))
 }
 
-/// Validate the shortener's own public host: a bare `host[:port]` with no scheme,
-/// path, query, fragment, or userinfo. Used to reject self-referential shortens.
-fn parse_public_host(s: &str) -> Result<&'static str, String> {
-    if s.is_empty() {
-        return Err("HOST must not be empty".to_string());
+/// Parse comma-separated owned hosts: bare `host[:port]` entries with no scheme,
+/// path, query, fragment, or userinfo. Used to reject owned-domain shortens.
+fn parse_disallowed_hosts(s: &str) -> Result<&'static [&'static str], String> {
+    let mut hosts = vec![];
+
+    for token in s.split(',') {
+        let host = token.trim();
+        if host.is_empty() {
+            return Err("DISALLOWED_HOSTS must not contain empty entries".to_string());
+        }
+
+        validate_host(host)?;
+        hosts.push(parse_static_str(host)?);
     }
 
-    if s.trim() != s {
-        return Err("HOST must not contain leading or trailing whitespace".to_string());
+    if hosts.is_empty() {
+        return Err("DISALLOWED_HOSTS must list at least one host".to_string());
     }
 
-    if s.contains('/') {
-        return Err("HOST must not include a scheme or path".to_string());
+    Ok(Box::leak(hosts.into_boxed_slice()))
+}
+
+fn validate_host(host: &str) -> Result<(), String> {
+    if host.contains('/') {
+        return Err("DISALLOWED_HOSTS entries must not include a scheme or path".to_string());
     }
 
-    let url = Url::parse(&format!("https://{s}"))
-        .map_err(|_| "HOST must be a host name with an optional port".to_string())?;
+    let url = Url::parse(&format!("https://{host}")).map_err(|_| {
+        "DISALLOWED_HOSTS entries must be host names with optional ports".to_string()
+    })?;
 
     let host_only = url.host_str().is_some()
         && url.username().is_empty()
@@ -201,16 +214,17 @@ fn parse_public_host(s: &str) -> Result<&'static str, String> {
 
     if !host_only {
         return Err(
-            "HOST must be a host name with an optional port, without scheme or path".to_string(),
+            "DISALLOWED_HOSTS entries must be host names with optional ports, without scheme or path"
+                .to_string(),
         );
     }
 
-    parse_static_str(s)
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_cors_origins, parse_public_host};
+    use super::{parse_cors_origins, parse_disallowed_hosts};
 
     #[test]
     fn parse_cors_origins_accepts_single_and_multiple_origins() {
@@ -254,24 +268,31 @@ mod tests {
     }
 
     #[test]
-    fn parse_public_host_accepts_host_with_optional_port() {
-        for host in ["example.com", "api.example.com:443", "localhost:4002"] {
-            assert_eq!(parse_public_host(host).expect("host should parse"), host);
-        }
+    fn parse_disallowed_hosts_accepts_single_and_multiple_hosts() {
+        assert_eq!(
+            parse_disallowed_hosts("example.com").expect("host should parse"),
+            ["example.com"]
+        );
+        assert_eq!(
+            parse_disallowed_hosts("api.example.test, app.example.test:8080")
+                .expect("hosts should parse"),
+            ["api.example.test", "app.example.test:8080"]
+        );
     }
 
     #[test]
-    fn parse_public_host_rejects_url_or_path_values() {
+    fn parse_disallowed_hosts_rejects_invalid_entries() {
         for host in [
             "",
             "https://example.com",
+            "example.com,",
             "example.com/path",
             "example.com/",
             "example.com?debug=true",
             "user@example.com",
         ] {
             assert!(
-                parse_public_host(host).is_err(),
+                parse_disallowed_hosts(host).is_err(),
                 "{host:?} should be rejected"
             );
         }
