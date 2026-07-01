@@ -53,16 +53,15 @@ export function AppBar(props: { status: NavStatus }) {
           />
         </a>
 
-        <span
+        <output
           class="inline-flex items-center gap-2 border-2 border-ink bg-surface px-2.5 py-1 font-mono text-[0.7rem] uppercase tracking-[0.14em] text-ink-muted"
-          role="status"
         >
           <span class={`h-1.5 w-1.5 ${ledClass()}`} aria-hidden />
           <Show when={props.status === "working"}>
             <span class="spinner text-accent" aria-hidden />
           </Show>
           <span class={textClass()}>{label()}</span>
-        </span>
+        </output>
       </div>
     </header>
   );
