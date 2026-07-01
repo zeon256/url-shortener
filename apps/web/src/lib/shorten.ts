@@ -20,7 +20,7 @@ interface ShortenErrorBody {
 // (base defaults to http://localhost:4002 for local dev). The request/response
 // shape is documented in docs/decision.md. The response carries `short_code`
 // and `original_url`; the displayable short link is the API host itself serving
-// `GET /:code` → 302, so we build `shortUrl` as `${BACKEND_URL}/${short_code}`.
+// `GET /:code` → 301, so we build `shortUrl` as `${BACKEND_URL}/${short_code}`.
 export async function shortenUrl(input: string): Promise<ShortenResult> {
   let response: Response;
   try {
