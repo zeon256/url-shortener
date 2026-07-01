@@ -13,6 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - *(api)* use 301 instead
 
+### Other
+
+- release v0.2.1
+
+## [0.2.1](https://github.com/zeon256/url-shortener/compare/v0.2.0...v0.2.1) - 2026-07-01
+
+### Fixed
+
+- *(api)* use 301 instead
+
 ## [0.2.0](https://github.com/zeon256/url-shortener/compare/v0.1.7...v0.2.0) - 2026-07-01
 
 ### Added
