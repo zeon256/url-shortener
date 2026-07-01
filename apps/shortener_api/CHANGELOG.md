@@ -13,6 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - *(api)* moka bounded redirect cache
 
+### Other
+
+- release v0.2.0
+
+## [0.2.0](https://github.com/zeon256/url-shortener/compare/v0.1.7...v0.2.0) - 2026-07-01
+
+### Added
+
+- *(api)* moka bounded redirect cache
+
 ## [0.1.7](https://github.com/zeon256/url-shortener/compare/v0.1.6...v0.1.7) - 2026-07-01
 
 ### Other
