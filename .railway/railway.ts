@@ -1,15 +1,16 @@
-import {
-  defineRailway,
-  project,
-  service,
-  postgres,
-  image,
-  github,
-} from "railway/iac";
+import { defineRailway, project, service, postgres, image } from "railway/iac";
+
+const requireEnv = (name: string): string => {
+  const value = process.env[name]?.trim();
+  if (!value) {
+    throw new Error(`${name} is required`);
+  }
+  return value;
+};
 
 export default defineRailway(() => {
-  const githubBranch = process.env.RAILWAY_GITHUB_BRANCH?.trim();
-  const shortenerApiTag = process.env.SHORTENER_API_TAG?.trim() || "0.1.2";
+  const shortenerApiTag = requireEnv("SHORTENER_API_TAG");
+  const shortenerWebTag = requireEnv("SHORTENER_WEB_TAG");
   const apiDomain = process.env.SHORTENER_API_DOMAIN?.trim() || "s.inve.rs";
   const webDomain =
     process.env.SHORTENER_WEB_DOMAIN?.trim() || "shorter.inve.rs";
@@ -35,14 +36,7 @@ export default defineRailway(() => {
   });
 
   const web = service("web", {
-    source: github(
-      "zeon256/url-shortener",
-      githubBranch ? { branch: githubBranch } : undefined,
-    ),
-    build: {
-      builder: "DOCKERFILE",
-      dockerfilePath: "apps/web/Dockerfile",
-    },
+    source: image(`ghcr.io/zeon256/shortener-web:${shortenerWebTag}`),
     healthcheck: "/",
     healthcheckTimeout: 30,
     domains: [{ domain: webDomain, port: 8080 }],
