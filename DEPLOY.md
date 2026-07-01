@@ -1,12 +1,12 @@
 # Deployment
 
-Production runs on [Railway](https://railway.com). The backend, frontend, and Postgres database live in one Railway project defined by [`.railway/railway.ts`](.railway/railway.ts).
+Production runs on [Railway](https://railway.com). The backend, frontend, and PostgreSQL database live in one Railway project defined by [`.railway/railway.ts`](.railway/railway.ts).
 
 Railway is not required for local evaluation. Use Docker Compose, `cargo run`, and `pnpm dev` for local development. See [`README.md`](README.md).
 
 ## Topology
 
-- `Postgres` - Railway-managed Postgres.
+- `Postgres` - Railway-managed PostgreSQL.
 - `shortener-api` - Rust backend deployed from a GHCR image selected by `SHORTENER_API_TAG`.
 - `web` - SolidJS frontend built from the repo root with `apps/web/Dockerfile`, served by Caddy.
 
@@ -17,7 +17,7 @@ Default production domains:
 
 The backend `DISALLOWED_HOSTS` value is a comma-separated list of owned bare hosts (`s.inve.rs,shorter.inve.rs`), not URLs. The API rejects schemes and paths in these entries because it uses them to reject owned-domain shortens.
 
-The backend also sets `REDIRECT_CACHE_CAPACITY=1000` for a bounded, per-process, best-effort redirect cache. Postgres remains the source of truth; each service instance warms its own cache after successful redirect lookups.
+The backend also sets `REDIRECT_CACHE_CAPACITY=1000` for a bounded, per-process, best-effort redirect cache. PostgreSQL remains the source of truth; each service instance warms its own cache after successful redirect lookups.
 
 ## Railway Inputs
 
@@ -120,9 +120,7 @@ If that command fails with `Unauthorized`, the token type/scope is wrong for thi
 
 ## CDN
 
-Railway CDN settings are not represented in the Railway TypeScript SDK used by `.railway/railway.ts`. If CDN is desired for the `web` service, configure it from the Railway dashboard.
-
-Keep CDN off for `shortener-api`; API responses and redirects should not be cached unless explicitly designed for that.
+CDN for the `web` service is optional and configured in the Railway dashboard, not in `.railway/railway.ts`. Keep CDN off for `shortener-api` so redirects and API responses are not cached at the edge.
 
 ## Checks
 
