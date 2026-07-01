@@ -125,6 +125,7 @@ function App() {
       { ...existing, createdAt: record.createdAt, animate: false },
       ...history().filter((entry) => entry.id !== existing.id),
     ].slice(0, HISTORY_MAX_ENTRIES));
+    setUrl("");
     setStatus("success");
   }
 
@@ -173,6 +174,7 @@ function App() {
       const entry: RecentEntry = { ...record, qrCode, animate: true };
       setExpandedId(entry.id);
       setHistory([entry, ...history()].slice(0, HISTORY_MAX_ENTRIES));
+      setUrl("");
       setStatus("success");
 
       const entryId = entry.id;
