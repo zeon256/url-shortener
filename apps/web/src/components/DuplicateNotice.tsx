@@ -8,7 +8,7 @@ export function DuplicateNotice(props: {
   return (
     <div
       class="rounded-control border-2 border-accent bg-accent-soft px-4 py-3"
-      role="status"
+      aria-live="polite"
     >
       <p class="font-mono text-xs text-ink-muted">
         Already shortened — same link.
