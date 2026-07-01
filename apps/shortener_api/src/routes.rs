@@ -1,8 +1,8 @@
 use axum::{
     Json, Router,
     extract::{Path, State},
-    http::StatusCode,
-    response::{IntoResponse, Redirect},
+    http::{HeaderValue, StatusCode, header},
+    response::IntoResponse,
     routing::{get, post},
 };
 use moka::future::Cache;
@@ -168,7 +168,13 @@ async fn redirect(
     Path(short_code): Path<Box<str>>,
 ) -> Result<impl IntoResponse, Error> {
     if let Some(original_url) = state.redirect_cache.get(&short_code).await {
-        return Ok(Redirect::permanent(&original_url));
+        return Ok((
+            StatusCode::MOVED_PERMANENTLY,
+            [(
+                header::LOCATION,
+                HeaderValue::from_str(&original_url).expect("valid redirect URL"),
+            )],
+        ));
     }
 
     let link = db::get_redirect_url(&state.pool, &short_code).await?;
@@ -177,7 +183,13 @@ async fn redirect(
         .insert(link.short_code, link.original_url.clone())
         .await;
 
-    Ok(Redirect::permanent(link.original_url.as_ref()))
+    Ok((
+        StatusCode::MOVED_PERMANENTLY,
+        [(
+            header::LOCATION,
+            HeaderValue::from_str(&link.original_url).expect("valid redirect URL"),
+        )],
+    ))
 }
 
 #[cfg(test)]
