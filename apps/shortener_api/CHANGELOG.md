@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.6](https://github.com/zeon256/url-shortener/compare/v0.1.5...v0.1.6) - 2026-07-01
+
+### Fixed
+
+- *(api)* ensure that we use a disallowed list instead of just 1 disallowed host
+
 ## [0.1.5](https://github.com/zeon256/url-shortener/compare/v0.1.4...v0.1.5) - 2026-07-01
 
 ### Fixed
