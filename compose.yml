@@ -24,6 +24,7 @@ services:
     environment:
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:8080}
       DISALLOWED_HOSTS: ${DISALLOWED_HOSTS:-localhost:8000,localhost:8080}
+      REDIRECT_CACHE_CAPACITY: ${REDIRECT_CACHE_CAPACITY:-1000}
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       POSTGRES_USER: ${POSTGRES_USER:-urlshort}

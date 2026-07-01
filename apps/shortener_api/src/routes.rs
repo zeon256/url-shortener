@@ -5,6 +5,7 @@ use axum::{
     response::{IntoResponse, Redirect},
     routing::{get, post},
 };
+use moka::future::Cache;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
@@ -28,16 +29,22 @@ pub struct ShortenResponse {
 struct AppState {
     pool: PgPool,
     server_args: ServerArgs,
+    redirect_cache: Cache<Box<str>, Box<str>>,
 }
 
 pub fn router(pool: PgPool, server_args: ServerArgs) -> Router {
     let cors = cors_layer(server_args.cors_allowed_origins);
+    let redirect_cache = Cache::new(server_args.redirect_cache_capacity.get());
 
     Router::new()
         .route("/healthz", get(healthz))
         .route("/api/v1/shorten", post(shorten))
         .route("/{code}", get(redirect))
-        .with_state(AppState { pool, server_args })
+        .with_state(AppState {
+            pool,
+            server_args,
+            redirect_cache,
+        })
         .layer(TraceLayer::new_for_http())
         .layer(cors)
 }
@@ -160,7 +167,16 @@ async fn redirect(
     State(state): State<AppState>,
     Path(short_code): Path<Box<str>>,
 ) -> Result<impl IntoResponse, Error> {
+    if let Some(original_url) = state.redirect_cache.get(&short_code).await {
+        return Ok(Redirect::permanent(&original_url));
+    }
+
     let link = db::get_redirect_url(&state.pool, &short_code).await?;
+    state
+        .redirect_cache
+        .insert(link.short_code, link.original_url.clone())
+        .await;
+
     Ok(Redirect::permanent(link.original_url.as_ref()))
 }
 

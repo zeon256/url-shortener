@@ -36,6 +36,8 @@ Optional env overrides live in [`.env.example`](.env.example); copy to `.env` if
 cp .env.example .env
 ```
 
+The API keeps a bounded, per-process, best-effort redirect cache controlled by `REDIRECT_CACHE_CAPACITY` (default `1000`). Postgres remains the source of truth; the cache only avoids repeated database reads for recently resolved short codes.
+
 ### Run the full stack
 
 From the repo root:
