@@ -112,6 +112,7 @@ impl From<RawProgramArgs> for ProgramArgs {
     }
 }
 
+#[must_use]
 pub fn from_env() -> ProgramArgs {
     argh_env::from_env::<RawProgramArgs>().into()
 }

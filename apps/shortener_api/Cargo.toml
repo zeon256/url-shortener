@@ -18,6 +18,7 @@ include = [
   "/release-inputs/web/tsconfig.json",
   "/release-inputs/web/vite.config.ts",
   "/src/**",
+  "/tests/**",
 ]
 
 [dependencies]
@@ -26,7 +27,7 @@ tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-sqlx = { version = "0.8", features = ["runtime-tokio", "postgres", "migrate"] }
+sqlx = { version = "0.8", features = ["runtime-tokio", "postgres", "migrate", "macros"] }
 url = { version = "2.5.8", features = ["serde"] }
 axum = "0.8.9"
 argh-env = { version = "0.1.0" }
@@ -35,3 +36,6 @@ anyhow = "1.0.103"
 rand = "0.10.1"
 tower-http = { version = "0.7.0", features = ["cors", "trace"] }
 mimalloc = { version = "0.1.48", features = ["v3"] }
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
