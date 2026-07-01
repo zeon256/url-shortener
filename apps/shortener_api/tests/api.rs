@@ -107,7 +107,7 @@ async fn redirects_known_short_code(pool: PgPool) {
         .await
         .expect("redirect request should complete");
 
-    assert_eq!(redirect_response.status(), StatusCode::PERMANENT_REDIRECT);
+    assert_eq!(redirect_response.status(), StatusCode::MOVED_PERMANENTLY);
     assert_eq!(
         redirect_response.headers().get(header::LOCATION),
         Some(&header::HeaderValue::from_static(
@@ -142,7 +142,7 @@ async fn redirects_cached_short_code_after_pool_is_closed(pool: PgPool) {
         )
         .await
         .expect("first redirect request should complete");
-    assert_eq!(first_redirect.status(), StatusCode::PERMANENT_REDIRECT);
+    assert_eq!(first_redirect.status(), StatusCode::MOVED_PERMANENTLY);
 
     pool.close().await;
 
@@ -155,7 +155,7 @@ async fn redirects_cached_short_code_after_pool_is_closed(pool: PgPool) {
         .await
         .expect("cached redirect request should complete");
 
-    assert_eq!(cached_redirect.status(), StatusCode::PERMANENT_REDIRECT);
+    assert_eq!(cached_redirect.status(), StatusCode::MOVED_PERMANENTLY);
     assert_eq!(
         cached_redirect.headers().get(header::LOCATION),
         Some(&header::HeaderValue::from_static(
