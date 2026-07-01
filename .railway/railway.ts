@@ -24,7 +24,7 @@ export default defineRailway(() => {
     domains: [{ domain: apiDomain, port: 8000 }],
     env: {
       PORT: "8000",
-      HOST: apiDomain,
+      DISALLOWED_HOSTS: `${apiDomain},${webDomain}`,
       CORS_ALLOWED_ORIGINS: `https://${webDomain}`,
       POSTGRES_HOST: db.env.PGHOST,
       POSTGRES_PORT: db.env.PGPORT,
