@@ -1,3 +1,5 @@
+use std::num::NonZeroU64;
+
 use argh_env::FromArgs;
 use url::Url;
 
@@ -15,6 +17,7 @@ pub struct ServerArgs {
     /// Owned hosts (`host[:port]`) that cannot be shortened. Distinct from
     /// `cors_allowed_origins`, which controls browser access to the API.
     pub disallowed_hosts: &'static [&'static str],
+    pub redirect_cache_capacity: NonZeroU64,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -55,6 +58,15 @@ struct RawProgramArgs {
     /// comma-separated owned hosts that cannot be shortened (`host[:port]`)
     #[argh(option, env = "DISALLOWED_HOSTS", from_str_fn(parse_disallowed_hosts))]
     disallowed_hosts: &'static [&'static str],
+
+    /// redirect cache capacity; must be greater than zero
+    #[argh(
+        option,
+        env = "REDIRECT_CACHE_CAPACITY",
+        default = "default_redirect_cache_capacity()",
+        from_str_fn(parse_redirect_cache_capacity)
+    )]
+    redirect_cache_capacity: NonZeroU64,
 
     /// postgres host
     #[argh(option, env = "POSTGRES_HOST", from_str_fn(parse_static_str))]
@@ -97,6 +109,7 @@ impl From<RawProgramArgs> for ProgramArgs {
                 address: args.address,
                 cors_allowed_origins: args.cors_allowed_origins,
                 disallowed_hosts: args.disallowed_hosts,
+                redirect_cache_capacity: args.redirect_cache_capacity,
             },
             postgres: PostgresArgs {
                 host: args.postgres_host,
@@ -122,11 +135,24 @@ const fn default_address() -> &'static str {
     "0.0.0.0"
 }
 
+fn default_redirect_cache_capacity() -> NonZeroU64 {
+    NonZeroU64::new(1000).expect("default redirect cache capacity should be non-zero")
+}
+
 #[allow(clippy::unnecessary_wraps)]
 fn parse_static_str(s: &str) -> Result<&'static str, String> {
     let s = s.to_string().into_boxed_str();
     let s: &'static str = Box::leak(s);
     Ok(s)
+}
+
+fn parse_redirect_cache_capacity(s: &str) -> Result<NonZeroU64, String> {
+    let capacity = s
+        .parse::<u64>()
+        .map_err(|_| "REDIRECT_CACHE_CAPACITY must be a positive integer".to_string())?;
+
+    NonZeroU64::new(capacity)
+        .ok_or_else(|| "REDIRECT_CACHE_CAPACITY must be greater than zero".to_string())
 }
 
 /// Parse a comma-separated list of CORS-allowed origins. Each token must be a
@@ -225,7 +251,8 @@ fn validate_host(host: &str) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_cors_origins, parse_disallowed_hosts};
+    use super::{parse_cors_origins, parse_disallowed_hosts, parse_redirect_cache_capacity};
+    use std::num::NonZeroU64;
 
     #[test]
     fn parse_cors_origins_accepts_single_and_multiple_origins() {
@@ -295,6 +322,28 @@ mod tests {
             assert!(
                 parse_disallowed_hosts(host).is_err(),
                 "{host:?} should be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn parse_redirect_cache_capacity_accepts_positive_values() {
+        assert_eq!(
+            parse_redirect_cache_capacity("1").expect("capacity should parse"),
+            NonZeroU64::new(1).expect("test capacity should be non-zero")
+        );
+        assert_eq!(
+            parse_redirect_cache_capacity("1000").expect("capacity should parse"),
+            NonZeroU64::new(1000).expect("test capacity should be non-zero")
+        );
+    }
+
+    #[test]
+    fn parse_redirect_cache_capacity_rejects_zero_and_invalid_values() {
+        for value in ["0", "", "-1", "abc"] {
+            assert!(
+                parse_redirect_cache_capacity(value).is_err(),
+                "{value:?} should be rejected"
             );
         }
     }

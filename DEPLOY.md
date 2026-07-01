@@ -17,6 +17,8 @@ Default production domains:
 
 The backend `DISALLOWED_HOSTS` value is a comma-separated list of owned bare hosts (`s.inve.rs,shorter.inve.rs`), not URLs. The API rejects schemes and paths in these entries because it uses them to reject owned-domain shortens.
 
+The backend also sets `REDIRECT_CACHE_CAPACITY=1000` for a bounded, per-process, best-effort redirect cache. Postgres remains the source of truth; each service instance warms its own cache after successful redirect lookups.
+
 ## Railway Inputs
 
 `.railway/railway.ts` reads these environment variables when the CLI evaluates the config:

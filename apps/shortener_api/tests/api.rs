@@ -6,6 +6,7 @@ use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use shortener_api::{cli::ServerArgs, routes};
 use sqlx::PgPool;
+use std::num::NonZeroU64;
 use tower::ServiceExt;
 
 #[derive(Debug, Deserialize)]
@@ -30,6 +31,8 @@ fn server_args() -> ServerArgs {
         address: "127.0.0.1",
         cors_allowed_origins: &["http://localhost:3000"],
         disallowed_hosts: &["sho.rt", "localhost:4002"],
+        redirect_cache_capacity: NonZeroU64::new(100_000)
+            .expect("test redirect cache capacity should be non-zero"),
     }
 }
 
@@ -109,6 +112,54 @@ async fn redirects_known_short_code(pool: PgPool) {
         redirect_response.headers().get(header::LOCATION),
         Some(&header::HeaderValue::from_static(
             "https://example.com/known"
+        ))
+    );
+}
+
+#[sqlx::test]
+async fn redirects_cached_short_code_after_pool_is_closed(pool: PgPool) {
+    let app = app(&pool);
+    let create_response = app
+        .clone()
+        .oneshot(
+            Request::post("/api/v1/shorten")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    serde_json::json!({ "url": "https://example.com/cached" }).to_string(),
+                ))
+                .expect("valid shorten request"),
+        )
+        .await
+        .expect("shorten request should complete");
+    let body = read_json::<ShortenResponse>(create_response).await;
+
+    let first_redirect = app
+        .clone()
+        .oneshot(
+            Request::get(format!("/{}", body.short_code))
+                .body(Body::empty())
+                .expect("valid redirect request"),
+        )
+        .await
+        .expect("first redirect request should complete");
+    assert_eq!(first_redirect.status(), StatusCode::PERMANENT_REDIRECT);
+
+    pool.close().await;
+
+    let cached_redirect = app
+        .oneshot(
+            Request::get(format!("/{}", body.short_code))
+                .body(Body::empty())
+                .expect("valid redirect request"),
+        )
+        .await
+        .expect("cached redirect request should complete");
+
+    assert_eq!(cached_redirect.status(), StatusCode::PERMANENT_REDIRECT);
+    assert_eq!(
+        cached_redirect.headers().get(header::LOCATION),
+        Some(&header::HeaderValue::from_static(
+            "https://example.com/cached"
         ))
     );
 }
