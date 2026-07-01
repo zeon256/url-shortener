@@ -44,7 +44,11 @@ export function RecentSection(props: {
 
         <div
           ref={listEl}
-          class="max-h-80 overflow-y-auto overscroll-contain bg-surface"
+          class={
+            props.expandedId
+              ? "h-72 overflow-y-auto overscroll-contain bg-surface"
+              : "max-h-72 overflow-y-auto overscroll-contain bg-surface"
+          }
         >
           <For each={props.entries}>
             {(entry) => (
