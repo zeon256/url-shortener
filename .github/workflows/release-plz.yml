@@ -209,6 +209,43 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  web-docker-image:
+    name: Build and push web image
+    needs: release-gate
+    if: needs.release-gate.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+
+      - name: Login to GHCR
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push web image
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          platforms: linux/amd64
+          push: true
+          build-args: |
+            VITE_BACKEND_URL=https://${{ vars.SHORTENER_API_DOMAIN || 's.inve.rs' }}
+          tags: |
+            ghcr.io/zeon256/shortener-web:${{ needs.release-gate.outputs.version }}
+            ghcr.io/zeon256/shortener-web:latest
+          cache-from: type=gha,scope=shortener-web
+          cache-to: type=gha,mode=max,scope=shortener-web
+
   trivy-scan:
     name: Scan image (Trivy)
     needs: [docker-image, release-gate]
@@ -235,7 +272,7 @@ jobs:
 
   railway-deploy:
     name: Deploy to Railway
-    needs: [release-gate, docker-image, trivy-scan]
+    needs: [release-gate, docker-image, web-docker-image, trivy-scan]
     if: needs.release-gate.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     environment: production
@@ -246,6 +283,7 @@ jobs:
       RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
       RAILWAY_ENVIRONMENT: ${{ vars.RAILWAY_ENVIRONMENT || 'production' }}
       SHORTENER_API_TAG: ${{ needs.release-gate.outputs.version }}
+      SHORTENER_WEB_TAG: ${{ needs.release-gate.outputs.version }}
       SHORTENER_API_DOMAIN: ${{ vars.SHORTENER_API_DOMAIN || 's.inve.rs' }}
       SHORTENER_WEB_DOMAIN: ${{ vars.SHORTENER_WEB_DOMAIN || 'shorter.inve.rs' }}
     steps:
@@ -279,6 +317,8 @@ jobs:
           : "${RAILWAY_API_TOKEN:?RAILWAY_API_TOKEN production secret is required}"
           : "${RAILWAY_PROJECT_ID:?RAILWAY_PROJECT_ID production variable is required}"
           : "${RAILWAY_ENVIRONMENT:?RAILWAY_ENVIRONMENT production variable is required}"
+          : "${SHORTENER_API_TAG:?SHORTENER_API_TAG is required}"
+          : "${SHORTENER_WEB_TAG:?SHORTENER_WEB_TAG is required}"
 
       - name: Link Railway project
         run: railway link --project "$RAILWAY_PROJECT_ID" --environment "$RAILWAY_ENVIRONMENT"
