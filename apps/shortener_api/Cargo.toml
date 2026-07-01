@@ -1,6 +1,6 @@
 [package]
 name = "shortener_api"
-version = "0.1.4"
+version = "0.1.5"
 edition = "2024"
 # These symlinked inputs make frontend and deploy changes visible to release-plz.
 include = [
