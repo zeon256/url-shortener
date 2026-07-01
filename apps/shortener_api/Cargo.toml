@@ -2,6 +2,23 @@
 name = "shortener_api"
 version = "0.1.4"
 edition = "2024"
+# These symlinked inputs make frontend and deploy changes visible to release-plz.
+include = [
+  "/CHANGELOG.md",
+  "/Cargo.toml",
+  "/Dockerfile.ci",
+  "/migrations/**",
+  "/release-inputs/railway/**",
+  "/release-inputs/web/Caddyfile",
+  "/release-inputs/web/Dockerfile",
+  "/release-inputs/web/index.html",
+  "/release-inputs/web/package.json",
+  "/release-inputs/web/public/**",
+  "/release-inputs/web/src/**",
+  "/release-inputs/web/tsconfig.json",
+  "/release-inputs/web/vite.config.ts",
+  "/src/**",
+]
 
 [dependencies]
 tokio = { version = "1.52.3", features = ["macros", "rt-multi-thread"] }
