@@ -1,10 +1,4 @@
-mod cli;
-mod db;
-mod errors;
-mod routes;
-mod shortcode;
-
-use cli::ProgramArgs;
+use shortener_api::{cli, cli::ProgramArgs, routes};
 use tokio::net::TcpListener;
 use tracing::info;
 
@@ -22,8 +16,7 @@ async fn main() -> anyhow::Result<()> {
 
     let ProgramArgs { server, postgres } = cli::from_env();
 
-    let pool = db::connect(postgres).await?;
-    sqlx::migrate!("./migrations").run(&pool).await?;
+    let pool = shortener_api::connect_and_migrate(postgres).await?;
     info!("connected to Postgres; migrations applied");
 
     let app = routes::router(pool, server);
